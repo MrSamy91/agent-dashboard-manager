@@ -1,0 +1,217 @@
+@import "tailwindcss";
+
+/* ═══════════════════════════════════════════════════════
+   NOIR TERMINAL — Agent Dashboard Theme
+   Editorial serif × dark terminal aesthetic
+   ═══════════════════════════════════════════════════════ */
+
+@theme {
+  /* ─── Typography ────────────────────────────────────── */
+  --font-family-display: var(--font-instrument), "Georgia", "Times New Roman", serif;
+  --font-family-body: var(--font-dm-sans), system-ui, -apple-system, sans-serif;
+  --font-family-mono: var(--font-jetbrains), "Courier New", monospace;
+
+  /* ─── Noir palette (surfaces + borders rehaussées) ─── */
+  --color-noir: #060606;
+  --color-noir-surface: #0c0c0c;
+  --color-noir-card: #111111;
+  --color-noir-elevated: #181818;
+  --color-noir-hover: #1e1e1e;
+  --color-noir-border: #282828;
+  --color-noir-border-light: #383838;
+
+  /* ─── Warm neutrals — rehaussés pour la lisibilité ── */
+  --color-warm-100: #eeebe5;
+  --color-warm-200: #d4d0ca;
+  --color-warm-300: #aaa69f;
+  --color-warm-400: #8a8680;
+  --color-warm-500: #656159;
+  --color-warm-600: #3e3b37;
+  --color-warm-700: #282623;
+
+  /* ─── Neon accent (the ONE memorable color) ──���──────── */
+  --color-neon: #00ff88;
+  --color-neon-hover: #33ffaa;
+  --color-neon-muted: #00cc6a;
+  --color-neon-dim: #00994f;
+  --color-neon-subtle: #00ff8812;
+
+  /* ─── Status semantics ──────────────────────────────── */
+  --color-status-running: #00ff88;
+  --color-status-completed: #5588ff;
+  --color-status-error: #ff4444;
+  --color-status-stopped: #ff9900;
+}
+
+/* ─── Base ────────────────────────────────────────────── */
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-noir);
+  color: var(--color-warm-100);
+  font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Atmospheric depth — subtle radial glow ─────────── */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background:
+    radial-gradient(ellipse 60% 45% at 15% 0%, #00ff8806, transparent),
+    radial-gradient(ellipse 40% 30% at 85% 100%, #5588ff04, transparent);
+  pointer-events: none;
+}
+
+/* ─── Film grain overlay — subtle texture ────────────── */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.03;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 256px 256px;
+}
+
+/* ═══════ ANIMATIONS ═══════════════════════════════════ */
+
+@keyframes pulse-neon {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@keyframes glow-breathe {
+  0%, 100% { box-shadow: 0 0 6px #00ff8820, 0 0 20px #00ff8808; }
+  50% { box-shadow: 0 0 12px #00ff8830, 0 0 40px #00ff8812; }
+}
+
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes scan-line {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer-bar {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+.animate-pulse-neon {
+  animation: pulse-neon 2.5s ease-in-out infinite;
+}
+
+.animate-glow {
+  animation: glow-breathe 3s ease-in-out infinite;
+}
+
+.animate-cursor {
+  animation: cursor-blink 1s step-end infinite;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.4s ease-out both;
+}
+
+/* ══��════ SCROLLBAR ════════════════════════════════════ */
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--color-noir-border-light);
+  border-radius: 2px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--color-warm-500);
+}
+
+/* ═══════ TERMINAL ════════════════════════════════════= */
+
+.terminal-line {
+  font-family: var(--font-family-mono);
+  font-size: 0.8rem;
+  line-height: 1.75;
+  letter-spacing: -0.01em;
+}
+
+/* CRT scan line effect — very subtle */
+.terminal-crt::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 2px,
+    #00000008 2px,
+    #00000008 4px
+  );
+}
+
+/* CRT vignette — darkened edges */
+.terminal-crt::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 60%, #00000040 100%);
+}
+
+/* ═══════ UTILITIES ═══════════════════════════════════ */
+
+/* Elegant divider line */
+.divider {
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--color-noir-border-light) 20%,
+    var(--color-noir-border-light) 80%,
+    transparent
+  );
+}
+
+/* Focus ring for inputs — green accent */
+.input-noir {
+  background: var(--color-noir-card);
+  border: 1px solid var(--color-noir-border);
+  color: var(--color-warm-100);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.input-noir::placeholder {
+  color: var(--color-warm-500);
+}
+.input-noir:focus {
+  outline: none;
+  border-color: #00ff8840;
+  box-shadow: 0 0 0 3px #00ff880a;
+}
+
+/* Selection color */
+::selection {
+  background: #00ff8825;
+  color: var(--color-warm-100);
+}
