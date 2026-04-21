@@ -56,6 +56,18 @@ export function Dashboard({ initialAgents, initialFolders }: DashboardProps) {
   const agentsRef = useRef<AgentState[]>(agents);
   agentsRef.current = agents;
 
+  // ─── Tab title dynamique — "2 running | Agent Dashboard" ───
+  useEffect(() => {
+    const running = agents.filter((a) => a.status === "running" || a.status === "pending").length;
+    const errored = agents.filter((a) => a.status === "error").length;
+    const parts: string[] = [];
+    if (running > 0) parts.push(`${running} running`);
+    if (errored > 0) parts.push(`${errored} error`);
+    document.title = parts.length > 0
+      ? `${parts.join(" · ")} | Agent Dashboard`
+      : "Agent Dashboard";
+  }, [agents]);
+
   // ─── Détection des changements de statut pour les toasts ───
   const prevStatusRef = useRef<Map<string, AgentState["status"]>>(
     new Map(initialAgents.map((a) => [a.id, a.status]))
@@ -150,6 +162,36 @@ export function Dashboard({ initialAgents, initialFolders }: DashboardProps) {
       return newPanels;
     });
   }, []);
+
+  // ─── Global keyboard shortcuts ───
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // Ignorer si l'utilisateur tape dans un input/textarea
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+
+      // Ctrl+N → ouvrir spawn dialog
+      if (e.ctrlKey && e.key === "n") {
+        e.preventDefault();
+        setShowSpawn(true);
+      }
+      // Ctrl+1/2/3/4 → focus panel
+      if (e.ctrlKey && e.key >= "1" && e.key <= "4") {
+        const idx = parseInt(e.key) - 1;
+        if (idx < panels.length) {
+          e.preventDefault();
+          setFocusedPanel(idx);
+        }
+      }
+      // Ctrl+W → fermer le panel focus (en multi-panel)
+      if (e.ctrlKey && e.key === "w" && layoutMode > 1) {
+        e.preventDefault();
+        closePanel(focusedPanel);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [panels.length, layoutMode, focusedPanel, closePanel]);
 
   const spawnAgent = useCallback(async (task: SpawnTask) => {
     try {

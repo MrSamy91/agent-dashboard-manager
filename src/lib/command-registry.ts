@@ -66,6 +66,8 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { name: "/help",        description: "Show available commands",            category: "ui" },
   { name: "/exit",        description: "Close this panel",                   category: "ui" },
   { name: "/stop",        description: "Stop the running agent",             category: "ui" },
+  { name: "/export",      description: "Download conversation as .md file",  category: "ui" },
+  { name: "/search",      description: "Search in terminal output",          category: "ui" },
 
   // Info — affichent les données de l'agent
   { name: "/model",       description: "Show current model",                 category: "info" },
@@ -166,6 +168,52 @@ handlers.set("/exit", (_args, ctx) => {
 
 handlers.set("/stop", (_args, ctx) => {
   ctx.onStop(ctx.agent.id);
+});
+
+handlers.set("/export", (_args, ctx) => {
+  // Formater la conversation en markdown et déclencher un téléchargement
+  const lines = ctx.messages.map((m) => {
+    const time = new Date(m.timestamp).toLocaleTimeString();
+    if (m.type === "text" && m.content.startsWith("> ")) {
+      return `### User (${time})\n${m.content.slice(2)}\n`;
+    }
+    if (m.type === "text") return `### Assistant (${time})\n${m.content}\n`;
+    if (m.type === "tool_use") return `> **Tool call**: ${m.content}\n`;
+    if (m.type === "tool_result") return `> _Result_: ${m.content}\n`;
+    if (m.type === "system") return `_${m.content}_\n`;
+    if (m.type === "error") return `**Error**: ${m.content}\n`;
+    return m.content;
+  });
+  const md = `# ${ctx.agent.name}\n\n_Exported ${new Date().toLocaleString()}_\n\n---\n\n${lines.join("\n")}`;
+  const blob = new Blob([md], { type: "text/markdown" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${ctx.agent.name.replace(/\s+/g, "-").toLowerCase()}-export.md`;
+  a.click();
+  URL.revokeObjectURL(url);
+  ctx.setMessages((prev) => [...prev, sysMsg("Conversation exported as .md file")]);
+});
+
+handlers.set("/search", (args, ctx) => {
+  if (!args.trim()) {
+    ctx.setMessages((prev) => [...prev, sysMsg("Usage: /search <query>\nSearches through terminal messages.")]);
+    return;
+  }
+  const query = args.trim().toLowerCase();
+  const matches = ctx.messages.filter((m) => m.content.toLowerCase().includes(query));
+  if (matches.length === 0) {
+    ctx.setMessages((prev) => [...prev, sysMsg(`No results for "${args.trim()}"`)]);
+  } else {
+    const preview = matches.slice(0, 5).map((m) => {
+      const time = new Date(m.timestamp).toLocaleTimeString();
+      const snippet = m.content.slice(0, 80).replace(/\n/g, " ");
+      return `  [${time}] ${snippet}${m.content.length > 80 ? "..." : ""}`;
+    }).join("\n");
+    ctx.setMessages((prev) => [...prev, sysMsg(
+      `Found ${matches.length} result(s) for "${args.trim()}":\n${preview}${matches.length > 5 ? `\n  ... and ${matches.length - 5} more` : ""}`
+    )]);
+  }
 });
 
 // ── Info commands ──
