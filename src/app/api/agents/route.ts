@@ -2,12 +2,14 @@ import { orchestrator, type SpawnTask } from "@/lib/agent-orchestrator";
 import { NextResponse } from "next/server";
 
 /**
- * GET /api/agents — Récupérer la liste de tous les agents
- * Utilisé par le dashboard pour le polling temps réel
+ * GET /api/agents — Récupérer agents + folders en un seul appel.
+ * Utilisé par le dashboard pour le polling temps réel.
+ * Inclure les folders ici évite un second appel réseau.
  */
 export async function GET() {
   const agents = orchestrator.getAll();
-  return NextResponse.json({ agents });
+  const folders = await orchestrator.getAllFolders();
+  return NextResponse.json({ agents, folders });
 }
 
 /**

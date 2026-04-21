@@ -9,11 +9,16 @@
  * Le state est en mémoire (Map). En prod, on migrerait vers Redis ou une DB.
  */
 
-import { readdir, stat } from "fs/promises";
+import { readdir, readFile, stat, writeFile } from "fs/promises";
 import { join } from "path";
 import { homedir } from "os";
 
 // ─── Types ──────────────────────────────────────────────────
+
+export interface Folder {
+  id: string;
+  name: string;
+}
 
 export interface AgentMessage {
   /** ID unique — permet une déduplication fiable côté client */
@@ -43,6 +48,8 @@ export interface AgentState {
   completedAt?: number;
   tools: string[];
   workingDirectory: string;
+  /** Dossier parent — undefined = agent orphelin (non classé) */
+  folderId?: string;
 }
 
 export interface SpawnTask {
@@ -62,16 +69,33 @@ export interface SpawnTask {
   resumeSessionId?: string;
   /** Continuer la dernière session dans le working directory */
   continueLastSession?: boolean;
+  /** Dossier dans lequel placer l'agent au spawn */
+  folderId?: string;
 }
 
 type EventCallback = (event: AgentMessage) => void;
+
+/** Chemin de persistence des dossiers (meme pattern que settings.json) */
+const FOLDERS_PATH = join(process.cwd(), "folders.json");
 
 // ─── Orchestrateur ──────────────────────────────────────────
 
 class AgentOrchestrator {
   private agents = new Map<string, AgentState>();
+  private folders = new Map<string, Folder>();
   private subscribers = new Map<string, Set<EventCallback>>();
   private abortControllers = new Map<string, AbortController>();
+
+  /**
+   * Promise qui garantit que les folders sont chargés depuis le disque.
+   * Lancée dans le constructor (pas de await possible),
+   * attendue dans chaque méthode folder avant d'accéder à this.folders.
+   */
+  private foldersReady: Promise<void>;
+
+  constructor() {
+    this.foldersReady = this.loadFolders();
+  }
 
   /** Spawner un nouvel agent et lancer son exécution en background */
   async spawn(task: SpawnTask): Promise<string> {
@@ -90,6 +114,7 @@ class AgentOrchestrator {
       startedAt: Date.now(),
       tools: task.tools,
       workingDirectory: task.workingDirectory || process.cwd(),
+      folderId: task.folderId,
     };
 
     this.agents.set(id, agent);
@@ -207,6 +232,53 @@ class AgentOrchestrator {
     return this.agents.delete(id);
   }
 
+  // ─── Folder CRUD ──────────────────────────────────────────
+
+  /** Créer un nouveau dossier */
+  async createFolder(name: string): Promise<Folder> {
+    await this.foldersReady;
+    const folder: Folder = { id: crypto.randomUUID(), name };
+    this.folders.set(folder.id, folder);
+    await this.saveFolders();
+    return folder;
+  }
+
+  /** Récupérer tous les dossiers */
+  async getAllFolders(): Promise<Folder[]> {
+    await this.foldersReady;
+    return Array.from(this.folders.values());
+  }
+
+  /** Renommer un dossier */
+  async renameFolder(id: string, newName: string): Promise<boolean> {
+    await this.foldersReady;
+    const folder = this.folders.get(id);
+    if (!folder) return false;
+    folder.name = newName;
+    await this.saveFolders();
+    return true;
+  }
+
+  /** Supprimer un dossier — les agents dedans deviennent orphelins */
+  async removeFolder(id: string): Promise<boolean> {
+    await this.foldersReady;
+    if (!this.folders.delete(id)) return false;
+    // Désassigner tous les agents qui pointaient vers ce folder
+    for (const agent of this.agents.values()) {
+      if (agent.folderId === id) agent.folderId = undefined;
+    }
+    await this.saveFolders();
+    return true;
+  }
+
+  /** Assigner un agent à un dossier (ou le désassigner avec undefined) */
+  assignAgentToFolder(agentId: string, folderId: string | undefined): boolean {
+    const agent = this.agents.get(agentId);
+    if (!agent) return false;
+    agent.folderId = folderId;
+    return true;
+  }
+
   /** S'abonner aux messages temps réel d'un agent (retourne unsubscribe) */
   subscribe(id: string, callback: EventCallback): () => void {
     if (!this.subscribers.has(id)) {
@@ -220,6 +292,23 @@ class AgentOrchestrator {
   }
 
   // ─── Privé ──────────────────────────────────────────────
+
+  /** Charger les dossiers depuis folders.json au démarrage */
+  private async loadFolders(): Promise<void> {
+    try {
+      const raw = await readFile(FOLDERS_PATH, "utf-8");
+      const arr = JSON.parse(raw) as Folder[];
+      for (const f of arr) this.folders.set(f.id, f);
+    } catch {
+      // Fichier inexistant ou invalide — on démarre avec une Map vide
+    }
+  }
+
+  /** Persister les dossiers sur disque (JSON array) */
+  private async saveFolders(): Promise<void> {
+    const arr = Array.from(this.folders.values());
+    await writeFile(FOLDERS_PATH, JSON.stringify(arr, null, 2), "utf-8");
+  }
 
   /**
    * Résoudre le vrai UUID de session depuis ~/.claude/projects/.
@@ -686,7 +775,7 @@ class AgentOrchestrator {
 
 // Singleton versionné — survit aux hot-reloads mais se recrée quand le code change.
 // Incrémenter la version force une nouvelle instance avec les méthodes à jour.
-const ORCHESTRATOR_VERSION = 3;
+const ORCHESTRATOR_VERSION = 4;
 const globalStore = globalThis as unknown as Record<string, AgentOrchestrator | undefined>;
 const globalKey = `__orchestrator_v${ORCHESTRATOR_VERSION}`;
 

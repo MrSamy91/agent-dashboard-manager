@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Pencil } from "lucide-react";
+import { Pencil, X } from "lucide-react";
 import { cn, formatDuration, formatCost, getStatusColor } from "@/lib/utils";
 import type { AgentState } from "@/lib/agent-orchestrator";
 
@@ -11,9 +11,11 @@ interface AgentCardProps {
   isSelected: boolean;
   onSelect: () => void;
   onRename: (id: string, newName: string) => void;
+  /** Si fourni, affiche un bouton X pour retirer l'agent du dossier */
+  onRemoveFromFolder?: () => void;
 }
 
-export function AgentCard({ agent, isSelected, onSelect, onRename }: AgentCardProps) {
+export function AgentCard({ agent, isSelected, onSelect, onRename, onRemoveFromFolder }: AgentCardProps) {
   const status = getStatusColor(agent.status);
   const isRunning = agent.status === "running";
 
@@ -119,6 +121,16 @@ export function AgentCard({ agent, isSelected, onSelect, onRename }: AgentCardPr
                 >
                   <Pencil className="h-2.5 w-2.5" />
                 </button>
+                {/* Bouton X — retirer du dossier (visible si agent dans un folder) */}
+                {onRemoveFromFolder && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onRemoveFromFolder(); }}
+                    className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-warm-500 hover:text-status-error"
+                    title="Remove from folder"
+                  >
+                    <X className="h-2.5 w-2.5" />
+                  </button>
+                )}
               </>
             )}
           </div>

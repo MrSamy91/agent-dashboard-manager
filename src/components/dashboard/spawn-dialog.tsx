@@ -15,15 +15,18 @@ import {
   Terminal,
   History,
   Plus,
-  Folder,
+  Folder as FolderIcon,
+  FolderOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AGENT_PRESETS, AVAILABLE_TOOLS, type AgentPreset } from "@/lib/agent-presets";
-import type { SpawnTask } from "@/lib/agent-orchestrator";
+import { DirectoryBrowser } from "./directory-browser";
+import type { SpawnTask, Folder } from "@/lib/agent-orchestrator";
 
 interface SpawnDialogProps {
   onSpawn: (task: SpawnTask) => void;
   onClose: () => void;
+  folders: Folder[];
 }
 
 interface SessionInfo {
@@ -95,11 +98,11 @@ function relativeTime(iso: string): string {
   return `${days}d ago`;
 }
 
-export function SpawnDialog({ onSpawn, onClose }: SpawnDialogProps) {
+export function SpawnDialog({ onSpawn, onClose, folders }: SpawnDialogProps) {
   // ─── Tabs : "new" ou "resume" ───
   const [tab, setTab] = useState<"new" | "resume">("new");
 
-  // ─── New agent state ───
+  // ─── New agent state (initialisé depuis les settings) ───
   const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [prompt, setPrompt] = useState("");
@@ -109,6 +112,21 @@ export function SpawnDialog({ onSpawn, onClose }: SpawnDialogProps) {
   const [loadSettings, setLoadSettings] = useState(true);
   const [maxBudget, setMaxBudget] = useState("");
   const [permissionMode, setPermissionMode] = useState<string>("acceptEdits");
+  const [folderId, setFolderId] = useState<string>("");
+  const [showBrowser, setShowBrowser] = useState(false);
+
+  // Charger les settings par défaut au mount
+  useEffect(() => {
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((s) => {
+        if (s.defaultModel) setModel(s.defaultModel);
+        if (s.defaultPermissionMode) setPermissionMode(s.defaultPermissionMode);
+        if (s.defaultWorkingDirectory) setDirectory(s.defaultWorkingDirectory);
+        if (s.loadClaudeMd !== undefined) setLoadSettings(s.loadClaudeMd);
+      })
+      .catch(() => {});
+  }, []);
 
   // ─── Resume session state ───
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
@@ -161,8 +179,9 @@ export function SpawnDialog({ onSpawn, onClose }: SpawnDialogProps) {
       loadSettings,
       maxBudgetUsd: maxBudget ? parseFloat(maxBudget) : undefined,
       permissionMode: permissionMode as SpawnTask["permissionMode"],
+      folderId: folderId || undefined,
     });
-  }, [name, prompt, tools, directory, model, loadSettings, maxBudget, permissionMode, onSpawn]);
+  }, [name, prompt, tools, directory, model, loadSettings, maxBudget, permissionMode, folderId, onSpawn]);
 
   /** Reprendre une session existante */
   const handleResumeSession = useCallback((session: SessionInfo) => {
@@ -192,22 +211,24 @@ export function SpawnDialog({ onSpawn, onClose }: SpawnDialogProps) {
 
   return (
     <AnimatePresence>
+      {/* Overlay — cliquable pour fermer */}
       <motion.div
         key="spawn-overlay"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onClick={onClose}
-        className="fixed inset-0 z-50 bg-black/75"
+        className="fixed inset-0 z-50 bg-black/60"
       />
 
+      {/* Sidebar panel — slide depuis la droite */}
       <motion.div
-        key="spawn-modal"
-        initial={{ opacity: 0, y: 30 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: 30 }}
-        transition={{ type: "spring", damping: 30, stiffness: 350 }}
-        className="fixed inset-x-4 top-[3vh] z-50 mx-auto max-h-[94vh] max-w-2xl overflow-y-auto border border-noir-border bg-noir-surface shadow-2xl shadow-black/60 sm:inset-x-auto"
+        key="spawn-panel"
+        initial={{ x: "100%" }}
+        animate={{ x: 0 }}
+        exit={{ x: "100%" }}
+        transition={{ type: "spring", damping: 30, stiffness: 300 }}
+        className="fixed right-0 top-0 bottom-0 z-50 w-[420px] max-w-[85vw] overflow-y-auto border-l border-noir-border bg-noir-surface shadow-2xl shadow-black/40 custom-scrollbar"
       >
         {/* ─── Header avec tabs ─── */}
         <div className="flex items-center justify-between border-b border-noir-border px-6 py-3">
@@ -335,8 +356,35 @@ export function SpawnDialog({ onSpawn, onClose }: SpawnDialogProps) {
                   <label htmlFor="agent-dir" className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.2em] text-warm-500">
                     Working Directory <span className="normal-case text-warm-600">(optional)</span>
                   </label>
-                  <input id="agent-dir" type="text" value={directory} onChange={(e) => setDirectory(e.target.value)}
-                    placeholder="/path/to/project" className="input-noir w-full rounded-none px-3 py-2 font-mono text-xs" />
+                  {/* Input + bouton browse */}
+                  <div className="flex gap-1.5">
+                    <input id="agent-dir" type="text" value={directory} onChange={(e) => setDirectory(e.target.value)}
+                      placeholder="/path/to/project" className="input-noir min-w-0 flex-1 rounded-none px-3 py-2 font-mono text-xs" />
+                    <motion.button
+                      type="button"
+                      onClick={() => setShowBrowser((v) => !v)}
+                      whileTap={{ scale: 0.95 }}
+                      className={cn(
+                        "flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center border transition-all",
+                        showBrowser
+                          ? "border-neon/30 bg-neon/8 text-neon"
+                          : "border-noir-border bg-noir-card text-warm-500 hover:border-noir-border-light hover:text-warm-300"
+                      )}
+                      title="Browse directories"
+                    >
+                      <FolderOpen className="h-3.5 w-3.5" />
+                    </motion.button>
+                  </div>
+                  {/* Directory browser inline */}
+                  <AnimatePresence>
+                    {showBrowser && (
+                      <DirectoryBrowser
+                        currentPath={directory}
+                        onSelect={(path) => setDirectory(path)}
+                        onClose={() => setShowBrowser(false)}
+                      />
+                    )}
+                  </AnimatePresence>
                 </div>
                 <div>
                   <label htmlFor="agent-model" className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.2em] text-warm-500">
@@ -359,6 +407,26 @@ export function SpawnDialog({ onSpawn, onClose }: SpawnDialogProps) {
                     className="input-noir w-full rounded-none px-3 py-2 font-mono text-xs" />
                 </div>
               </div>
+
+              {/* Folder (optional) */}
+              {folders.length > 0 && (
+                <div>
+                  <label htmlFor="agent-folder" className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.2em] text-warm-500">
+                    Folder <span className="normal-case text-warm-600">(optional)</span>
+                  </label>
+                  <select
+                    id="agent-folder"
+                    value={folderId}
+                    onChange={(e) => setFolderId(e.target.value)}
+                    className="input-noir w-full rounded-none px-3 py-2 font-mono text-xs"
+                  >
+                    <option value="">No folder</option>
+                    {folders.map((f) => (
+                      <option key={f.id} value={f.id}>{f.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* Settings toggle */}
               <button type="button" onClick={() => setLoadSettings((v) => !v)} className="flex items-center gap-2.5 font-mono text-[11px]">
@@ -421,7 +489,7 @@ export function SpawnDialog({ onSpawn, onClose }: SpawnDialogProps) {
                     whileTap={{ scale: 0.99 }}
                     className="group flex w-full items-start gap-3 border border-noir-border bg-noir-card px-4 py-3 text-left transition-all hover:border-noir-border-light hover:bg-noir-elevated"
                   >
-                    <Folder className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-warm-500 group-hover:text-neon/60" />
+                    <FolderIcon className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-warm-500 group-hover:text-neon/60" />
                     <div className="min-w-0 flex-1">
                       {/* Nom du projet */}
                       <div className="flex items-center gap-2">

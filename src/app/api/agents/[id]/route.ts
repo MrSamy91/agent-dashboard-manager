@@ -21,21 +21,27 @@ export async function GET(_request: Request, { params }: RouteParams) {
 }
 
 /**
- * PATCH /api/agents/:id — Renommer un agent
- * Body: { name: string }
+ * PATCH /api/agents/:id — Modifier un agent (rename et/ou assignation folder)
+ * Body: { name?: string, folderId?: string | null }
  */
 export async function PATCH(request: Request, { params }: RouteParams) {
   const { id } = await params;
-  const { name } = (await request.json()) as { name: string };
+  const body = (await request.json()) as { name?: string; folderId?: string | null };
 
-  if (!name?.trim()) {
-    return NextResponse.json({ error: "Name is required" }, { status: 400 });
-  }
-
-  const success = orchestrator.rename(id, name.trim());
-  if (!success) {
+  const agent = orchestrator.getById(id);
+  if (!agent) {
     return NextResponse.json({ error: "Agent not found" }, { status: 404 });
   }
+
+  const hasName = typeof body.name === "string" && body.name.trim();
+  const hasFolderId = "folderId" in body;
+
+  if (!hasName && !hasFolderId) {
+    return NextResponse.json({ error: "Provide name or folderId" }, { status: 400 });
+  }
+
+  if (hasName) orchestrator.rename(id, body.name!.trim());
+  if (hasFolderId) orchestrator.assignAgentToFolder(id, body.folderId ?? undefined);
 
   return NextResponse.json({ agent: orchestrator.getById(id) });
 }

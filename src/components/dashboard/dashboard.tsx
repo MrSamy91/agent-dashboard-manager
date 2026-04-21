@@ -9,7 +9,21 @@ import { StatsCards } from "./stats-cards";
 import { AgentSidebar } from "./agent-sidebar";
 import { AgentDetailPanel } from "./agent-detail-panel";
 import { SpawnDialog } from "./spawn-dialog";
-import type { AgentState, SpawnTask } from "@/lib/agent-orchestrator";
+import {
+  toastAgentSpawned,
+  toastAgentCompleted,
+  toastAgentError,
+  toastAgentStopped,
+  toastFolderCreated,
+  toastFolderDeleted,
+} from "@/lib/toasts";
+import {
+  createFolder as createFolderAction,
+  renameFolder as renameFolderAction,
+  deleteFolder as deleteFolderAction,
+  assignAgentToFolder as assignAgentAction,
+} from "@/lib/actions/folders";
+import type { AgentState, SpawnTask, Folder } from "@/lib/agent-orchestrator";
 
 /**
  * Modes de layout multi-panel :
@@ -19,8 +33,16 @@ import type { AgentState, SpawnTask } from "@/lib/agent-orchestrator";
  */
 type LayoutMode = 1 | 2 | 4;
 
-export function Dashboard() {
-  const [agents, setAgents] = useState<AgentState[]>([]);
+interface DashboardProps {
+  /** Agents pré-chargés côté serveur (SSR) — évite le flash vide */
+  initialAgents: AgentState[];
+  /** Dossiers pré-chargés côté serveur (SSR) */
+  initialFolders: Folder[];
+}
+
+export function Dashboard({ initialAgents, initialFolders }: DashboardProps) {
+  const [agents, setAgents] = useState<AgentState[]>(initialAgents);
+  const [folders, setFolders] = useState<Folder[]>(initialFolders);
   const [showSpawn, setShowSpawn] = useState(false);
 
   // Multi-panel : liste des agent IDs affichés (max 4)
@@ -34,6 +56,11 @@ export function Dashboard() {
   const agentsRef = useRef<AgentState[]>(agents);
   agentsRef.current = agents;
 
+  // ─── Détection des changements de statut pour les toasts ───
+  const prevStatusRef = useRef<Map<string, AgentState["status"]>>(
+    new Map(initialAgents.map((a) => [a.id, a.status]))
+  );
+
   // ─── Polling adaptatif ───
   useEffect(() => {
     let active = true;
@@ -44,12 +71,35 @@ export function Dashboard() {
         const res = await fetch("/api/agents");
         if (res.ok && active) {
           const data = await res.json();
-          // Appliquer les name overrides pour ne pas écraser un rename en cours
+
+          // ─── Agents : appliquer name overrides ───
           const merged = (data.agents as AgentState[]).map((a) => {
-            const override = nameOverrides.current.get(a.id);
-            return override ? { ...a, name: override } : a;
+            const nameOv = nameOverrides.current.get(a.id);
+            return nameOv ? { ...a, name: nameOv } : a;
           });
           setAgents(merged);
+
+          // ─── Folders : appliquer folder name overrides ───
+          if (data.folders) {
+            const mergedFolders = (data.folders as Folder[]).map((f) => {
+              const folderOv = folderNameOverrides.current.get(f.id);
+              return folderOv ? { ...f, name: folderOv } : f;
+            });
+            setFolders(mergedFolders);
+          }
+
+          // ─── Détection changements de statut → toasts ───
+          for (const agent of merged) {
+            const prevStatus = prevStatusRef.current.get(agent.id);
+            if (prevStatus && prevStatus !== agent.status) {
+              if (agent.status === "completed") toastAgentCompleted(agent.name);
+              else if (agent.status === "error") toastAgentError(agent.name);
+              else if (agent.status === "stopped") toastAgentStopped(agent.name);
+            }
+          }
+          // Mettre à jour la ref pour la prochaine comparaison
+          prevStatusRef.current = new Map(merged.map((a) => [a.id, a.status]));
+
           const hasActive = (data.agents as AgentState[]).some(
             (a) => a.status === "running" || a.status === "pending"
           );
@@ -112,6 +162,7 @@ export function Dashboard() {
         const data = await res.json();
         selectAgent(data.id);
         setShowSpawn(false);
+        toastAgentSpawned(task.name);
       } else {
         const err = await res.json().catch(() => null);
         console.error("Spawn failed:", res.status, err?.error ?? res.statusText);
@@ -122,6 +173,14 @@ export function Dashboard() {
   }, [selectAgent]);
 
   const stopAgent = useCallback(async (id: string) => {
+    const agent = agentsRef.current.find((a) => a.id === id);
+    // Optimistic : marquer "stopped" immédiatement côté client
+    if (agent) {
+      setAgents((prev) =>
+        prev.map((a) => (a.id === id ? { ...a, status: "stopped" as const, completedAt: Date.now() } : a))
+      );
+      toastAgentStopped(agent.name);
+    }
     try {
       await fetch(`/api/agents/${id}`, { method: "DELETE" });
     } catch {
@@ -145,11 +204,10 @@ export function Dashboard() {
     }
   }, []);
 
-  // Map des noms overrides — protège contre le polling qui écraserait un rename récent
+  // ─── Rename agents — optimistic update + protection polling ───
   const nameOverrides = useRef<Map<string, string>>(new Map());
 
   const renameAgent = useCallback(async (id: string, newName: string) => {
-    // Sauvegarder l'override pour que le polling ne l'écrase pas
     nameOverrides.current.set(id, newName);
     setAgents((prev) =>
       prev.map((a) => (a.id === id ? { ...a, name: newName } : a))
@@ -160,8 +218,6 @@ export function Dashboard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: newName }),
       });
-      // Une fois le serveur confirmé, on peut retirer l'override
-      // Le prochain poll aura la bonne valeur
       if (res.ok) {
         setTimeout(() => nameOverrides.current.delete(id), 6000);
       }
@@ -169,6 +225,80 @@ export function Dashboard() {
       console.error("Failed to rename agent");
       nameOverrides.current.delete(id);
     }
+  }, []);
+
+  // ─── Folder CRUD via Server Actions ───
+  const folderNameOverrides = useRef<Map<string, string>>(new Map());
+
+  const handleCreateFolder = useCallback(async (name: string) => {
+    // Optimistic : ajouter le folder immédiatement avec un ID temporaire
+    const tempId = `temp-${crypto.randomUUID()}`;
+    const optimisticFolder: Folder = { id: tempId, name };
+    setFolders((prev) => [...prev, optimisticFolder]);
+    toastFolderCreated(name);
+
+    try {
+      const realFolder = await createFolderAction(name);
+      // Remplacer le folder temporaire par le vrai (avec l'ID serveur)
+      setFolders((prev) =>
+        prev.map((f) => (f.id === tempId ? realFolder : f))
+      );
+    } catch {
+      // Rollback : retirer le folder temporaire en cas d'erreur
+      setFolders((prev) => prev.filter((f) => f.id !== tempId));
+      console.error("Failed to create folder");
+    }
+  }, []);
+
+  const handleRenameFolder = useCallback(async (id: string, newName: string) => {
+    // Optimistic update + override pour le polling
+    folderNameOverrides.current.set(id, newName);
+    setFolders((prev) =>
+      prev.map((f) => (f.id === id ? { ...f, name: newName } : f))
+    );
+    try {
+      const ok = await renameFolderAction(id, newName);
+      if (ok) {
+        setTimeout(() => folderNameOverrides.current.delete(id), 6000);
+      }
+    } catch {
+      console.error("Failed to rename folder");
+      folderNameOverrides.current.delete(id);
+    }
+  }, []);
+
+  const handleDeleteFolder = useCallback(async (id: string) => {
+    // Sauvegarder l'état avant pour rollback potentiel
+    const prevFolders = folders;
+    const folder = folders.find((f) => f.id === id);
+
+    // Optimistic : retirer immédiatement du state
+    setFolders((prev) => prev.filter((f) => f.id !== id));
+    setAgents((prev) =>
+      prev.map((a) => (a.folderId === id ? { ...a, folderId: undefined } : a))
+    );
+    if (folder) toastFolderDeleted(folder.name);
+
+    try {
+      const ok = await deleteFolderAction(id);
+      if (!ok) {
+        // Rollback si le serveur refuse
+        setFolders(prevFolders);
+      }
+    } catch {
+      // Rollback en cas d'erreur réseau
+      setFolders(prevFolders);
+      console.error("Failed to delete folder");
+    }
+  }, [folders]);
+
+  const handleAssignAgent = useCallback(async (agentId: string, folderId: string | undefined) => {
+    // Optimistic update
+    setAgents((prev) =>
+      prev.map((a) => (a.id === agentId ? { ...a, folderId } : a))
+    );
+    // Server Action pour persister
+    await assignAgentAction(agentId, folderId ?? null);
   }, []);
 
   // IDs des agents visibles dans les panels (pour highlight sidebar)
@@ -198,10 +328,15 @@ export function Dashboard() {
         <div className="w-72 flex-shrink-0 overflow-hidden border-r border-noir-border lg:w-80">
           <AgentSidebar
             agents={agents}
+            folders={folders}
             selectedIds={selectedIds}
             onSelect={selectAgent}
             onSpawn={() => setShowSpawn(true)}
             onRename={renameAgent}
+            onCreateFolder={handleCreateFolder}
+            onRenameFolder={handleRenameFolder}
+            onDeleteFolder={handleDeleteFolder}
+            onAssignAgent={handleAssignAgent}
           />
         </div>
 
@@ -301,6 +436,7 @@ export function Dashboard() {
         <SpawnDialog
           onSpawn={spawnAgent}
           onClose={() => setShowSpawn(false)}
+          folders={folders}
         />
       )}
     </div>

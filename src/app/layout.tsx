@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { DM_Sans, Instrument_Serif, JetBrains_Mono } from "next/font/google";
+import { ToasterProvider } from "@/components/toaster-provider";
 import "./globals.css";
 
 /* Trois polices distinctives qui créent la tension visuelle du dashboard :
@@ -40,6 +41,7 @@ export default function RootLayout({
         suppressHydrationWarning
         className={`${dmSans.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable} font-body antialiased`}
       >
+        <ToasterProvider />
         {children}
       </body>
     </html>

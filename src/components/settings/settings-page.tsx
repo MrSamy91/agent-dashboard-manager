@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { toastSettingsSaved } from "@/lib/toasts";
 
 /* ─── Types ──────────────────────────────────────────────────── */
 
@@ -123,6 +124,7 @@ export function SettingsPage() {
         const data = await res.json();
         setSettings(data);
         setSaved(true);
+        toastSettingsSaved();
         // Reset le feedback apres 2 secondes
         setTimeout(() => setSaved(false), 2000);
       } catch {

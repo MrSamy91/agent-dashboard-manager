@@ -1,3 +1,4 @@
+@import "gooey-toast/styles.css";
 @import "tailwindcss";
 
 /* ═══════════════════════════════════════════════════════
@@ -214,4 +215,27 @@ body::after {
 ::selection {
   background: #00ff8825;
   color: var(--color-warm-100);
+}
+
+/* ═══════ GOOEY-TOAST THEME ══════════════════════════════ */
+
+/* Couleurs d'état alignées sur le thème Noir Terminal */
+:root {
+  --gooey-state-success: oklch(0.78 0.22 155);
+  --gooey-state-info: oklch(0.65 0.17 260);
+  --gooey-state-error: oklch(0.60 0.24 25);
+  --gooey-state-warning: oklch(0.75 0.18 70);
+  --gooey-shadow:
+    drop-shadow(0 1px 1px rgba(0, 0, 0, 0.3))
+    drop-shadow(0 16px 28px rgba(0, 0, 0, 0.5));
+}
+
+/* Description lisible sur fond sombre */
+[data-gooey-description] {
+  color: var(--color-warm-300, #aaa69f);
+}
+
+/* z-index au-dessus du film grain (9999) */
+[data-gooey-viewport] {
+  z-index: 10000;
 }
