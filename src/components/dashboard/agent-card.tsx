@@ -49,18 +49,23 @@ export function AgentCard({ agent, isSelected, onSelect, onRename, onRemoveFromF
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -12 }}
       onClick={onSelect}
-      // ─── Drag & drop natif : l'agent peut être droppé dans un panel ───
+      // ─── Drag & drop natif : l'agent peut être droppé dans un folder ───
+      // On utilise les events natifs (pas framer-motion drag) pour le DnD sidebar
       draggable={!editing}
       onDragStart={(e) => {
-        // Stocker l'agent ID dans le dataTransfer
-        (e as unknown as React.DragEvent).dataTransfer?.setData("agent-id", agent.id);
+        const nativeEvent = e as unknown as React.DragEvent;
+        nativeEvent.dataTransfer?.setData("agent-id", agent.id);
+        // Force le curseur "grab" pendant le drag (necessaire sur Windows)
+        if (nativeEvent.dataTransfer) {
+          nativeEvent.dataTransfer.effectAllowed = "move";
+        }
       }}
       className={cn(
         "group relative w-full border-b border-noir-border px-5 py-3.5 text-left transition-colors",
         isSelected
           ? "bg-noir-elevated"
           : "bg-transparent hover:bg-noir-card",
-        !editing && "cursor-grab active:cursor-grabbing"
+        !editing && "[cursor:grab] active:[cursor:grabbing]"
       )}
     >
       {/* Indicateur vert à gauche quand sélectionné */}
@@ -103,10 +108,14 @@ export function AgentCard({ agent, isSelected, onSelect, onRename, onRemoveFromF
               />
             ) : (
               <>
-                <p className={cn(
-                  "truncate font-display text-sm",
-                  isSelected ? "text-warm-100" : "text-warm-200"
-                )}>
+                <p
+                  className={cn(
+                    "truncate font-display text-sm",
+                    isSelected ? "text-warm-100" : "text-warm-200"
+                  )}
+                  /* Tooltip natif avec le prompt complet — utile pour voir ce que fait l'agent */
+                  title={agent.prompt}
+                >
                   {agent.name}
                 </p>
                 {/* Bouton crayon — visible au hover */}

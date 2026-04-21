@@ -23,6 +23,8 @@ interface FolderSectionProps {
   onRenameFolder: (id: string, newName: string) => void;
   onDeleteFolder: (id: string) => void;
   onAssignAgent: (agentId: string, folderId: string | undefined) => void;
+  /** Flash neon temporaire quand le folder vient d'etre cree */
+  flashNeon?: boolean;
 }
 
 /** Compteurs de statut pour les pills */
@@ -42,9 +44,21 @@ export function FolderSection({
   onRenameFolder,
   onDeleteFolder,
   onAssignAgent,
+  flashNeon,
 }: FolderSectionProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  /** Confirmation inline avant suppression — evite les deletes accidentels */
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Reset le confirmDelete apres 2s si pas de second clic
+  useEffect(() => {
+    if (confirmDelete) {
+      confirmTimer.current = setTimeout(() => setConfirmDelete(false), 2000);
+      return () => { if (confirmTimer.current) clearTimeout(confirmTimer.current); };
+    }
+  }, [confirmDelete]);
 
   // ─── Rename inline (meme pattern que AgentCard) ───
   const [editing, setEditing] = useState(false);
@@ -100,15 +114,21 @@ export function FolderSection({
   return (
     <div>
       {/* ─── Header du dossier ─── */}
-      <div
+      <motion.div
         onClick={() => !editing && setCollapsed((c) => !c)}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
+        /* Flash neon a la creation — animate le border puis disparait */
+        animate={flashNeon ? {
+          borderColor: ["rgba(0,255,136,0.5)", "rgba(0,255,136,0)"],
+          boxShadow: ["0 0 8px rgba(0,255,136,0.15)", "0 0 0px rgba(0,255,136,0)"],
+        } : {}}
+        transition={flashNeon ? { duration: 0.8, ease: "easeOut" } : {}}
         className={cn(
           "group flex items-center gap-2 px-4 py-2.5 cursor-pointer transition-colors border-b border-noir-border",
           "hover:bg-noir-card",
-          dragOver && "ring-1 ring-inset ring-neon/30 bg-neon/[0.03]"
+          dragOver && "ring-1 ring-inset ring-neon/40 bg-neon/[0.06] border-neon/20"
         )}
       >
         {/* Chevron rotation */}
@@ -184,15 +204,39 @@ export function FolderSection({
           <button
             onClick={(e) => {
               e.stopPropagation();
-              onDeleteFolder(folder.id);
+              if (confirmDelete) {
+                // Second clic = suppression confirmee
+                onDeleteFolder(folder.id);
+                setConfirmDelete(false);
+              } else {
+                // Premier clic = demande de confirmation
+                setConfirmDelete(true);
+              }
             }}
-            className="flex h-4 w-4 items-center justify-center text-warm-500 hover:text-status-error"
-            title="Delete folder"
+            className={cn(
+              "flex h-4 items-center justify-center transition-all",
+              confirmDelete
+                ? "w-auto gap-0.5 px-1 text-status-error"
+                : "w-4 text-warm-500 hover:text-status-error"
+            )}
+            title={confirmDelete ? "Click again to confirm" : "Delete folder"}
           >
             <Trash2 className="h-2.5 w-2.5" />
+            {confirmDelete && (
+              <span className="font-mono text-[8px] uppercase">sure?</span>
+            )}
           </button>
         </div>
-      </div>
+      </motion.div>
+
+      {/* ─── Hint quand le folder est vide ─── */}
+      {agents.length === 0 && !collapsed && (
+        <div className="ml-6 border-l border-noir-border-light px-4 py-2">
+          <p className="font-mono text-[9px] text-warm-600 italic">
+            drop agents here
+          </p>
+        </div>
+      )}
 
       {/* ─── Liste des agents enfants (collapsible) ─── */}
       <AnimatePresence initial={false}>

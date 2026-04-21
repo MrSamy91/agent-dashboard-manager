@@ -183,6 +183,22 @@ export function AgentSidebar({
                 />
               ))}
             </AnimatePresence>
+
+            {/* ─── Empty state quand on a des folders mais aucun agent ─── */}
+            {hasOnlyEmptyFolders && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="px-5 py-10 text-center"
+              >
+                <p className="font-mono text-[10px] text-warm-500">
+                  no agents running
+                </p>
+                <p className="mt-1 font-mono text-[10px] text-warm-600">
+                  press <span className="text-neon/70">+</span> to spawn one
+                </p>
+              </motion.div>
+            )}
           </>
         )}
       </div>

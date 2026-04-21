@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, memo } from "react";
+import { useState, useEffect, useMemo, useCallback, memo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X,
@@ -17,6 +17,7 @@ import {
   Plus,
   Folder as FolderIcon,
   FolderOpen,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AGENT_PRESETS, AVAILABLE_TOOLS, type AgentPreset } from "@/lib/agent-presets";
@@ -114,6 +115,9 @@ export function SpawnDialog({ onSpawn, onClose, folders }: SpawnDialogProps) {
   const [permissionMode, setPermissionMode] = useState<string>("acceptEdits");
   const [folderId, setFolderId] = useState<string>("");
   const [showBrowser, setShowBrowser] = useState(false);
+  /** Loading state pendant le spawn — feedback visuel bref */
+  const [spawning, setSpawning] = useState(false);
+  const spawningTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Charger les settings par défaut au mount
   useEffect(() => {
@@ -166,10 +170,11 @@ export function SpawnDialog({ onSpawn, onClose, folders }: SpawnDialogProps) {
     );
   }, []);
 
-  /** Spawn un nouvel agent */
+  /** Spawn un nouvel agent — affiche un spinner bref pour feedback */
   const handleSubmitNew = useCallback((e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !prompt.trim() || tools.length === 0) return;
+    if (!name.trim() || !prompt.trim() || tools.length === 0 || spawning) return;
+    setSpawning(true);
     onSpawn({
       name: name.trim(),
       prompt: prompt.trim(),
@@ -181,7 +186,14 @@ export function SpawnDialog({ onSpawn, onClose, folders }: SpawnDialogProps) {
       permissionMode: permissionMode as SpawnTask["permissionMode"],
       folderId: folderId || undefined,
     });
-  }, [name, prompt, tools, directory, model, loadSettings, maxBudget, permissionMode, folderId, onSpawn]);
+    // Reset apres un court delai (le dialog se ferme normalement avant)
+    spawningTimer.current = setTimeout(() => setSpawning(false), 1500);
+  }, [name, prompt, tools, directory, model, loadSettings, maxBudget, permissionMode, folderId, onSpawn, spawning]);
+
+  // Cleanup timer au unmount
+  useEffect(() => {
+    return () => { if (spawningTimer.current) clearTimeout(spawningTimer.current); };
+  }, []);
 
   /** Reprendre une session existante */
   const handleResumeSession = useCallback((session: SessionInfo) => {
@@ -365,14 +377,22 @@ export function SpawnDialog({ onSpawn, onClose, folders }: SpawnDialogProps) {
                       onClick={() => setShowBrowser((v) => !v)}
                       whileTap={{ scale: 0.95 }}
                       className={cn(
-                        "flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center border transition-all",
+                        "flex h-[34px] flex-shrink-0 items-center justify-center gap-1.5 border transition-all",
+                        /* Largeur dynamique : icone seule si pas de path, sinon on affiche le nom du dossier */
+                        directory.trim() ? "max-w-[140px] px-2" : "w-[34px]",
                         showBrowser
                           ? "border-neon/30 bg-neon/8 text-neon"
                           : "border-noir-border bg-noir-card text-warm-500 hover:border-noir-border-light hover:text-warm-300"
                       )}
-                      title="Browse directories"
+                      title={directory.trim() || "Browse directories"}
                     >
-                      <FolderOpen className="h-3.5 w-3.5" />
+                      <FolderOpen className="h-3.5 w-3.5 flex-shrink-0" />
+                      {/* Affiche le dernier segment du path quand un directory est selectionne */}
+                      {directory.trim() && (
+                        <span className="truncate font-mono text-[9px]">
+                          {directory.trim().replace(/\\/g, "/").split("/").filter(Boolean).pop()}
+                        </span>
+                      )}
                     </motion.button>
                   </div>
                   {/* Directory browser inline */}
@@ -447,11 +467,15 @@ export function SpawnDialog({ onSpawn, onClose, folders }: SpawnDialogProps) {
                 className="border border-noir-border px-4 py-2 font-mono text-[11px] text-warm-400 transition-colors hover:border-noir-border-light hover:text-warm-200">
                 cancel
               </button>
-              <motion.button type="submit" disabled={!name.trim() || !prompt.trim() || tools.length === 0}
+              <motion.button type="submit" disabled={!name.trim() || !prompt.trim() || tools.length === 0 || spawning}
                 whileTap={{ scale: 0.98 }}
                 className="group flex items-center gap-2 border border-neon/30 bg-neon/8 px-5 py-2 font-mono text-[11px] font-medium text-neon transition-all hover:border-neon/50 hover:bg-neon/12 disabled:cursor-not-allowed disabled:opacity-30">
-                spawn
-                <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                {spawning ? "spawning" : "spawn"}
+                {spawning ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                )}
               </motion.button>
             </div>
           </form>
