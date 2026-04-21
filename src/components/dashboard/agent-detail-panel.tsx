@@ -7,6 +7,7 @@ import { cn, formatDuration, formatCost, getStatusColor } from "@/lib/utils";
 import { TerminalOutput } from "./terminal-output";
 import { CliInput } from "./cli-input";
 import { COMMAND_HANDLERS, type ModelOption } from "@/lib/command-registry";
+import { getModelDisplayName } from "@/lib/model-display";
 import type { AgentState, AgentMessage } from "@/lib/agent-orchestrator";
 
 interface AgentDetailPanelProps {
@@ -185,13 +186,16 @@ export function AgentDetailPanel({ agent, onStop, onResume, onSpawn, onClose, co
         transition={{ duration: 0.15 }}
         className="flex h-full flex-col"
       >
-        {/* ─── Header du panel ─── */}
-        <div className="flex items-start justify-between border-b border-noir-border px-4 py-3">
+        {/* ─── Header du panel — compact en multi-panel ─── */}
+        <div className={cn(
+          "flex items-start justify-between border-b border-noir-border px-4",
+          compact ? "py-2" : "py-3"
+        )}>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-3">
               <h2 className={cn(
                 "truncate font-display text-warm-100",
-                compact ? "text-base" : "text-2xl"
+                compact ? "text-sm" : "text-2xl"
               )}>
                 {agent.name}
               </h2>
@@ -205,32 +209,36 @@ export function AgentDetailPanel({ agent, onStop, onResume, onSpawn, onClose, co
               </span>
             </div>
 
-            {/* Métadonnées — compact, mono */}
-            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[11px] text-warm-400">
-              <span>
-                <span className="text-warm-600">time </span>
-                {formatDuration(agent.startedAt, agent.completedAt)}
-              </span>
-              <span>
-                <span className="text-warm-600">cost </span>
-                {formatCost(agent.costUsd)}
-              </span>
-              <span>
-                <span className="text-warm-600">tools </span>
-                {agent.tools.join(", ")}
-              </span>
-              {agent.sessionId && (
+            {/* Métadonnées — masquées en compact pour économiser l'espace */}
+            {!compact && (
+              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[11px] text-warm-400">
                 <span>
-                  <span className="text-warm-600">session </span>
-                  {agent.sessionId.slice(0, 12)}
+                  <span className="text-warm-600">time </span>
+                  {formatDuration(agent.startedAt, agent.completedAt)}
                 </span>
-              )}
-            </div>
+                <span>
+                  <span className="text-warm-600">cost </span>
+                  {formatCost(agent.costUsd)}
+                </span>
+                <span>
+                  <span className="text-warm-600">tools </span>
+                  {agent.tools.join(", ")}
+                </span>
+                {agent.sessionId && (
+                  <span>
+                    <span className="text-warm-600">session </span>
+                    {agent.sessionId.slice(0, 12)}
+                  </span>
+                )}
+              </div>
+            )}
 
-            {/* Prompt — tronqué, discret */}
-            <p className="mt-2 max-w-2xl text-xs text-warm-500 line-clamp-1">
-              {agent.prompt}
-            </p>
+            {/* Prompt — tronqué, discret, masqué en compact */}
+            {!compact && (
+              <p className="mt-2 max-w-2xl text-xs text-warm-500 line-clamp-1">
+                {agent.prompt}
+              </p>
+            )}
           </div>
 
           {/* Actions */}
@@ -244,7 +252,7 @@ export function AgentDetailPanel({ agent, onStop, onResume, onSpawn, onClose, co
               ) : (
                 <Copy className="h-3 w-3" />
               )}
-              {copied ? "copied" : "copy"}
+              {compact ? "" : copied ? "copied" : "copy"}
             </button>
 
             {isRunning && (
@@ -254,7 +262,7 @@ export function AgentDetailPanel({ agent, onStop, onResume, onSpawn, onClose, co
                 className="flex items-center gap-1.5 rounded border border-status-error/20 px-2.5 py-1 font-mono text-[10px] text-status-error/70 transition-colors hover:border-status-error/40 hover:bg-status-error/5 hover:text-status-error"
               >
                 <Square className="h-3 w-3" />
-                stop
+                {compact ? "" : "stop"}
               </motion.button>
             )}
 
@@ -304,9 +312,9 @@ export function AgentDetailPanel({ agent, onStop, onResume, onSpawn, onClose, co
           onRegisterModelPicker={(fn) => { openModelPickerRef.current = fn; }}
         />
 
-        {/* ─── Status bar — model │ cost │ duration ─── */}
-        <div className="flex items-center gap-0 border-t border-noir-border/60 bg-noir-surface px-4 py-1 font-mono text-[10px] text-warm-500">
-          <span className="text-warm-400">{agent.model || "unknown"}</span>
+        {/* ─── Status bar — model │ cost │ duration │ status ─── */}
+        <div className="flex items-center border-t border-noir-border/60 bg-noir-surface px-4 py-1 font-mono text-[10px] text-warm-500">
+          <span className="text-warm-400">{getModelDisplayName(agent.model)}</span>
           <span className="mx-2 text-warm-700">│</span>
           <span>{formatCost(agent.costUsd)}</span>
           <span className="mx-2 text-warm-700">│</span>
@@ -315,6 +323,10 @@ export function AgentDetailPanel({ agent, onStop, onResume, onSpawn, onClose, co
           <span className={cn("flex items-center gap-1.5", status.text)}>
             <span className={cn("inline-block h-1.5 w-1.5 rounded-full", status.dot, isRunning && "animate-pulse-neon")} />
             {agent.status}
+          </span>
+          {/* Compteur de messages — discret mais utile */}
+          <span className="ml-auto text-warm-600">
+            {liveMessages.length} msgs
           </span>
         </div>
       </motion.div>

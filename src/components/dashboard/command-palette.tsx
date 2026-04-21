@@ -18,10 +18,18 @@ interface CommandPaletteProps {
   onHover: (index: number) => void;
 }
 
-/** Badge de catégorie compact */
+/** Badge de catégorie compact avec couleurs par type */
 function CategoryBadge({ category }: { category: string }) {
+  const colors: Record<string, string> = {
+    ui:    "text-neon/60 bg-neon/5",
+    info:  "text-status-completed/60 bg-status-completed/5",
+    agent: "text-status-stopped/60 bg-status-stopped/5",
+  };
   return (
-    <span className="flex-shrink-0 font-mono text-[8px] uppercase tracking-wider text-warm-600 bg-noir-elevated px-1.5 py-0.5">
+    <span className={cn(
+      "flex-shrink-0 font-mono text-[8px] uppercase tracking-wider px-1.5 py-0.5",
+      colors[category] || "text-warm-600 bg-noir-elevated"
+    )}>
       {category}
     </span>
   );

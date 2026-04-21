@@ -124,10 +124,17 @@ export function TerminalOutput({ messages, isLive }: TerminalOutputProps) {
       {/* Corps du terminal */}
       <div ref={scrollContainerRef} className="custom-scrollbar relative flex-1 min-h-0 overflow-y-auto px-4 py-3">
         {messages.length === 0 ? (
-          <div className="flex h-full items-center justify-center">
+          <div className="flex h-full flex-col items-center justify-center gap-4">
             <span className="font-mono text-xs text-warm-600">
               awaiting output<span className="animate-cursor text-neon/50">_</span>
             </span>
+            {/* Raccourcis clavier — aide contextuelle pour les nouveaux utilisateurs */}
+            <div className="flex flex-col items-center gap-1.5 font-mono text-[9px] text-warm-700">
+              <span><span className="text-warm-500">/</span> commands</span>
+              <span><span className="text-warm-500">↑↓</span> history</span>
+              <span><span className="text-warm-500">Tab</span> autocomplete</span>
+              <span><span className="text-warm-500">Ctrl+C</span> stop agent</span>
+            </div>
           </div>
         ) : (
           <AnimatePresence mode="popLayout">

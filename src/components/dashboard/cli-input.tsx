@@ -323,10 +323,3 @@ export function CliInput({ onSubmit, isRunning, agentName, onModelSelect, onRegi
   );
 }
 
-/**
- * Hook pour exposer openModelPicker au parent.
- * Usage: le parent passe ce ref au CliInput et le handler /model l'appelle.
- */
-export type CliInputHandle = {
-  openModelPicker: () => void;
-};
