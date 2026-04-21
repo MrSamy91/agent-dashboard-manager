@@ -572,14 +572,9 @@ class AgentOrchestrator {
           agent.costUsd = result.total_cost_usd ?? 0;
           agent.status = result.subtype === "success" ? "completed" : "error";
           agent.completedAt = Date.now();
-
-          if (result.result) {
-            this.emit(id, {
-              timestamp: Date.now(),
-              type: "text",
-              content: result.result,
-            });
-          }
+          // NE PAS émettre result.result ici — le texte a déjà été émis
+          // par le handler "assistant" au-dessus. L'émettre ici causerait
+          // un doublon visible dans le terminal.
         }
       }
     } catch (err) {
@@ -733,9 +728,7 @@ class AgentOrchestrator {
           agent.costUsd = result.total_cost_usd ?? agent.costUsd;
           agent.status = result.subtype === "success" ? "completed" : "error";
           agent.completedAt = Date.now();
-          if (result.result) {
-            this.emit(id, { timestamp: Date.now(), type: "text", content: result.result });
-          }
+          // NE PAS émettre result.result — déjà émis par le handler "assistant"
         }
       }
     } catch (err) {
