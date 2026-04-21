@@ -48,6 +48,8 @@ export interface AgentState {
   completedAt?: number;
   tools: string[];
   workingDirectory: string;
+  /** Modèle Claude utilisé (ex: "claude-sonnet-4-6") — renseigné par le SDK init */
+  model?: string;
   /** Dossier parent — undefined = agent orphelin (non classé) */
   folderId?: string;
 }
@@ -531,6 +533,8 @@ class AgentOrchestrator {
           };
 
           if (sys.subtype === "init") {
+            // Capturer le modèle pour l'afficher dans la status bar
+            if (sys.model) agent.model = sys.model;
             // Le message init prouve que le SDK a chargé la config
             // Si CLAUDE.md est loaded, les skills/slash_commands refletent son contenu
             this.emit(id, {
@@ -775,7 +779,7 @@ class AgentOrchestrator {
 
 // Singleton versionné — survit aux hot-reloads mais se recrée quand le code change.
 // Incrémenter la version force une nouvelle instance avec les méthodes à jour.
-const ORCHESTRATOR_VERSION = 4;
+const ORCHESTRATOR_VERSION = 5;
 const globalStore = globalThis as unknown as Record<string, AgentOrchestrator | undefined>;
 const globalKey = `__orchestrator_v${ORCHESTRATOR_VERSION}`;
 

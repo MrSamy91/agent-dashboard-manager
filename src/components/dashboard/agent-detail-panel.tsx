@@ -2,9 +2,11 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
-import { Square, Copy, Check, Send, CornerDownLeft, X, Plus } from "lucide-react";
+import { Square, Copy, Check, X, Plus } from "lucide-react";
 import { cn, formatDuration, formatCost, getStatusColor } from "@/lib/utils";
 import { TerminalOutput } from "./terminal-output";
+import { CliInput } from "./cli-input";
+import { COMMAND_HANDLERS, type ModelOption } from "@/lib/command-registry";
 import type { AgentState, AgentMessage } from "@/lib/agent-orchestrator";
 
 interface AgentDetailPanelProps {
@@ -19,9 +21,12 @@ interface AgentDetailPanelProps {
 export function AgentDetailPanel({ agent, onStop, onResume, onSpawn, onClose, compact }: AgentDetailPanelProps) {
   const [liveMessages, setLiveMessages] = useState<AgentMessage[]>([]);
   const [copied, setCopied] = useState(false);
-  const [chatInput, setChatInput] = useState("");
-  const [sending, setSending] = useState(false);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Ref pour ouvrir le model picker depuis le handler /model
+  const openModelPickerRef = useRef<(() => void) | null>(null);
+
+  // Tick pour la durée live dans la status bar
+  const [, setTick] = useState(0);
 
   // Connexion SSE pour le streaming temps réel des messages de l'agent
   useEffect(() => {
@@ -34,8 +39,7 @@ export function AgentDetailPanel({ agent, onStop, onResume, onSpawn, onClose, co
     if (["completed", "error", "stopped"].includes(agent.status)) return;
 
     const eventSource = new EventSource(`/api/agents/${agent.id}/stream`);
-    // Set des IDs déjà reçus pour une déduplication O(1) — évite les doublons
-    // liés au catch-up history du SSE vs l'état initial chargé depuis agent.output
+    // Set des IDs déjà reçus pour une déduplication O(1)
     const seenIds = new Set<string>(agent.output.map((m) => m.id));
 
     eventSource.onmessage = (event) => {
@@ -45,7 +49,6 @@ export function AgentDetailPanel({ agent, onStop, onResume, onSpawn, onClose, co
       }
       try {
         const msg = JSON.parse(event.data) as AgentMessage;
-        // Déduplication fiable par ID unique (vs l'ancien check timestamp+content)
         if (seenIds.has(msg.id)) return;
         seenIds.add(msg.id);
         setLiveMessages((prev) => [...prev, msg]);
@@ -56,10 +59,16 @@ export function AgentDetailPanel({ agent, onStop, onResume, onSpawn, onClose, co
 
     eventSource.onerror = () => eventSource.close();
 
-    // Cleanup critique : fermer la connexion SSE avant d'en ouvrir une nouvelle
-    // (changement d'agent sélectionné) pour éviter les connexions fantômes
     return () => eventSource.close();
   }, [agent?.id, agent?.status]);
+
+  // Timer pour mettre à jour la durée quand l'agent tourne
+  const isRunning = agent?.status === "running" || agent?.status === "pending";
+  useEffect(() => {
+    if (!isRunning) return;
+    const interval = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(interval);
+  }, [isRunning]);
 
   const copyOutput = useCallback(() => {
     const text = liveMessages.map((m) => m.content).join("\n");
@@ -67,6 +76,53 @@ export function AgentDetailPanel({ agent, onStop, onResume, onSpawn, onClose, co
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [liveMessages]);
+
+  // ─── CLI submit handler : commandes locales, info, agent, ou message libre ───
+  const handleCliSubmit = useCallback((input: string) => {
+    if (!agent) return;
+
+    if (input.startsWith("/")) {
+      const spaceIdx = input.indexOf(" ");
+      const cmdName = spaceIdx === -1 ? input.trim() : input.slice(0, spaceIdx);
+      const cmdArgs = spaceIdx === -1 ? "" : input.slice(spaceIdx + 1);
+
+      const handler = COMMAND_HANDLERS.get(cmdName);
+      if (handler) {
+        handler(cmdArgs, {
+          setMessages: setLiveMessages,
+          messages: liveMessages,
+          agent,
+          onStop,
+          onClose,
+          onResume,
+          openModelPicker: () => openModelPickerRef.current?.(),
+        });
+        return;
+      }
+
+      // Commande inconnue → afficher une erreur
+      setLiveMessages((prev) => [...prev, {
+        id: crypto.randomUUID(),
+        timestamp: Date.now(),
+        type: "error",
+        content: `Unknown command: ${cmdName}\nType /help for available commands.`,
+      }]);
+      return;
+    }
+
+    // Message normal → envoyer au subprocess
+    if (isRunning) {
+      setLiveMessages((prev) => [...prev, {
+        id: crypto.randomUUID(),
+        timestamp: Date.now(),
+        type: "system",
+        content: "Agent is working... use /stop to interrupt or wait for completion.",
+      }]);
+      return;
+    }
+
+    onResume(agent.id, input);
+  }, [agent, liveMessages, isRunning, onResume, onStop, onClose]);
 
   // ─── État vide — aucun agent sélectionné ───
   if (!agent) {
@@ -78,7 +134,6 @@ export function AgentDetailPanel({ agent, onStop, onResume, onSpawn, onClose, co
           transition={{ delay: 0.2 }}
           className="text-center"
         >
-          {/* ASCII art décoratif */}
           <pre className="mx-auto font-mono text-[9px] leading-tight text-warm-600 select-none">
 {`  ╭──────────────────────────╮
   │                          │
@@ -105,7 +160,6 @@ export function AgentDetailPanel({ agent, onStop, onResume, onSpawn, onClose, co
   }
 
   const status = getStatusColor(agent.status);
-  const isRunning = agent.status === "running" || agent.status === "pending";
 
   return (
     <div className="h-full overflow-hidden">
@@ -136,7 +190,7 @@ export function AgentDetailPanel({ agent, onStop, onResume, onSpawn, onClose, co
               </span>
             </div>
 
-            {/* Métadonnées en ligne — compact, mono */}
+            {/* Métadonnées — compact, mono */}
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[11px] text-warm-400">
               <span>
                 <span className="text-warm-600">time </span>
@@ -189,7 +243,6 @@ export function AgentDetailPanel({ agent, onStop, onResume, onSpawn, onClose, co
               </motion.button>
             )}
 
-            {/* Bouton close — visible en multi-panel */}
             {onClose && (
               <button
                 onClick={onClose}
@@ -202,58 +255,41 @@ export function AgentDetailPanel({ agent, onStop, onResume, onSpawn, onClose, co
           </div>
         </div>
 
-        {/* Terminal — flex-1 min-h-0 : remplit l'espace restant et shrink si besoin */}
+        {/* Terminal output — remplit l'espace restant */}
         <div className="flex-1 min-h-0 p-2">
-          <TerminalOutput messages={liveMessages} isLive={isRunning} />
+          <TerminalOutput messages={liveMessages} isLive={!!isRunning} />
         </div>
 
-        {/* ─── Chat input — toujours visible, désactivé quand l'agent tourne ─── */}
-        <div className="flex-shrink-0 border-t border-noir-border px-4 py-2">
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                if (!chatInput.trim() || sending || isRunning) return;
-                setSending(true);
-                try {
-                  onResume(agent.id, chatInput.trim());
-                  setChatInput("");
-                } finally {
-                  setSending(false);
-                }
-              }}
-              className="flex items-end gap-2"
-            >
-              <div className="relative flex-1">
-                <textarea
-                  ref={inputRef}
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    // Enter pour envoyer, Shift+Enter pour nouvelle ligne
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      e.currentTarget.form?.requestSubmit();
-                    }
-                  }}
-                  placeholder={isRunning ? "agent is working..." : "continue the conversation..."}
-                  disabled={isRunning || sending}
-                  rows={1}
-                  className="input-noir w-full resize-none rounded-none px-3 py-2 pr-8 font-mono text-xs leading-relaxed disabled:opacity-40"
-                />
-                <div className="pointer-events-none absolute bottom-2 right-2 flex items-center gap-1 font-mono text-[9px] text-warm-600">
-                  <CornerDownLeft className="h-2.5 w-2.5" />
-                </div>
-              </div>
+        {/* ─── CLI Input (remplace l'ancien textarea) ─── */}
+        <CliInput
+          onSubmit={handleCliSubmit}
+          isRunning={!!isRunning}
+          agentName={agent.name}
+          onModelSelect={(model: ModelOption) => {
+            const label = model.label;
+            const value = model.value || "default";
+            setLiveMessages((prev) => [...prev, {
+              id: crypto.randomUUID(),
+              timestamp: Date.now(),
+              type: "system",
+              content: `Model set to ${label} (${value})\nApplies to the next agent spawn or resume.`,
+            }]);
+          }}
+          onRegisterModelPicker={(fn) => { openModelPickerRef.current = fn; }}
+        />
 
-              <motion.button
-                type="submit"
-                disabled={!chatInput.trim() || sending || isRunning}
-                whileTap={{ scale: 0.95 }}
-                className="flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center border border-neon/25 bg-neon/5 text-neon transition-all hover:border-neon/40 hover:bg-neon/10 disabled:cursor-not-allowed disabled:opacity-25"
-              >
-                <Send className="h-3.5 w-3.5" />
-              </motion.button>
-            </form>
+        {/* ─── Status bar — model │ cost │ duration ─── */}
+        <div className="flex items-center gap-0 border-t border-noir-border/60 bg-noir-surface px-4 py-1 font-mono text-[10px] text-warm-500">
+          <span className="text-warm-400">{agent.model || "unknown"}</span>
+          <span className="mx-2 text-warm-700">│</span>
+          <span>{formatCost(agent.costUsd)}</span>
+          <span className="mx-2 text-warm-700">│</span>
+          <span>{formatDuration(agent.startedAt, agent.completedAt)}</span>
+          <span className="mx-2 text-warm-700">│</span>
+          <span className={cn("flex items-center gap-1.5", status.text)}>
+            <span className={cn("inline-block h-1.5 w-1.5 rounded-full", status.dot, isRunning && "animate-pulse-neon")} />
+            {agent.status}
+          </span>
         </div>
       </motion.div>
     </div>
