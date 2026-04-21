@@ -25,6 +25,7 @@ import {
   assignAgentToFolder as assignAgentAction,
 } from "@/lib/actions/folders";
 import type { AgentState, SpawnTask, Folder } from "@/lib/agent-orchestrator";
+import { useDynamicFavicon } from "@/hooks/use-dynamic-favicon";
 
 /**
  * Modes de layout multi-panel :
@@ -53,6 +54,22 @@ export function Dashboard({ initialAgents, initialFolders }: DashboardProps) {
   const [focusedPanel, setFocusedPanel] = useState(0);
   // Drag & drop : index du panel survolé pendant un drag
   const [dragOverPanel, setDragOverPanel] = useState<number | null>(null);
+
+  // ─── Sidebar mobile : overlay slide-out ───
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Fermer automatiquement la sidebar mobile quand on passe en desktop
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const handler = (e: MediaQueryListEvent) => {
+      if (e.matches) setSidebarOpen(false);
+    };
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+
+  // ─── Favicon dynamique selon l'activite des agents ───
+  useDynamicFavicon(agents);
 
   const agentsRef = useRef<AgentState[]>(agents);
   agentsRef.current = agents;
@@ -196,6 +213,8 @@ export function Dashboard({ initialAgents, initialFolders }: DashboardProps) {
       newPanels[focusedPanel] = id;
       return newPanels;
     });
+    // Fermer la sidebar mobile apres selection
+    setSidebarOpen(false);
   }, [focusedPanel]);
 
   // ─── Fermer un panel ───
@@ -404,15 +423,29 @@ export function Dashboard({ initialAgents, initialFolders }: DashboardProps) {
       <Header
         agentCount={agents.filter((a) => a.status === "running").length}
         onSpawn={() => setShowSpawn(true)}
+        onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
       />
 
       <StatsCards agents={agents} />
 
       {/* Zone principale — min-h-0 permet au flex-1 de shrink sous la taille du contenu */}
       <div className="mx-auto flex w-full max-w-[1920px] flex-1 min-h-0 gap-0">
-        {/* Sidebar — largeur contrôlée par le resize handle */}
+        {/* ─── Sidebar mobile : overlay avec backdrop ─── */}
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 z-40 bg-black/50 md:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
+        {/* Sidebar — desktop : inline + resizable, mobile : slide-out overlay */}
         <div
-          className="flex-shrink-0 overflow-hidden border-r border-noir-border"
+          className={cn(
+            "flex-shrink-0 overflow-hidden border-r border-noir-border bg-noir",
+            // Mobile : positionnement fixe, slide depuis la gauche
+            "fixed inset-y-0 left-0 z-50 transition-transform duration-300 md:relative md:z-auto md:translate-x-0",
+            sidebarOpen ? "translate-x-0" : "-translate-x-full"
+          )}
           style={{ width: sidebarWidth }}
         >
           <AgentSidebar
@@ -429,11 +462,11 @@ export function Dashboard({ initialAgents, initialFolders }: DashboardProps) {
           />
         </div>
 
-        {/* Resize handle — barre fine entre sidebar et panels */}
+        {/* Resize handle — desktop only, barre fine entre sidebar et panels */}
         <div
           onMouseDown={startResize}
           className={cn(
-            "w-1 flex-shrink-0 cursor-col-resize transition-colors duration-150",
+            "hidden w-1 flex-shrink-0 cursor-col-resize transition-colors duration-150 md:block",
             isResizing ? "bg-neon/30" : "hover:bg-neon/20"
           )}
         />

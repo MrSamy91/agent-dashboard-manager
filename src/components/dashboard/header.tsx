@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Plus, Settings } from "lucide-react";
+import { Menu, Plus, Settings } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
@@ -16,9 +16,13 @@ interface ConnectionStatus {
 interface HeaderProps {
   agentCount: number;
   onSpawn: () => void;
+  /** Toggle sidebar overlay on mobile */
+  onToggleSidebar?: () => void;
+  /** Nombre de tâches en attente dans la queue */
+  queueCount?: number;
 }
 
-export function Header({ agentCount, onSpawn }: HeaderProps) {
+export function Header({ agentCount, onSpawn, onToggleSidebar, queueCount }: HeaderProps) {
   const [status, setStatus] = useState<ConnectionStatus | null>(null);
 
   // Fetch le statut de connexion au mount
@@ -32,14 +36,26 @@ export function Header({ agentCount, onSpawn }: HeaderProps) {
   return (
     <header className="relative border-b border-noir-border">
       <div className="mx-auto flex h-14 max-w-[1600px] items-center justify-between px-8">
-        {/* Titre en serif */}
-        <div className="flex items-baseline gap-4">
-          <h1 className="font-display text-xl tracking-tight text-warm-100">
-            Agent Dashboard
-          </h1>
-          <span className="hidden font-mono text-[11px] tracking-wide text-warm-500 sm:inline">
-            claude sdk
-          </span>
+        {/* Titre en serif + hamburger mobile */}
+        <div className="flex items-center gap-3">
+          {/* Hamburger — visible uniquement sur mobile pour ouvrir la sidebar */}
+          {onToggleSidebar && (
+            <button
+              onClick={onToggleSidebar}
+              className="flex h-8 w-8 items-center justify-center text-warm-400 transition-colors hover:text-warm-100 md:hidden"
+              aria-label="Toggle sidebar"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+          )}
+          <div className="flex items-baseline gap-4">
+            <h1 className="font-display text-xl tracking-tight text-warm-100">
+              Agent Dashboard
+            </h1>
+            <span className="hidden font-mono text-[11px] tracking-wide text-warm-500 sm:inline">
+              claude sdk
+            </span>
+          </div>
         </div>
 
         <div className="flex items-center gap-5">

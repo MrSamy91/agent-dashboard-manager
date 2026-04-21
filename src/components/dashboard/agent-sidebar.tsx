@@ -60,6 +60,37 @@ export function AgentSidebar({
     return { folderMap: map, orphans: orphanList };
   }, [agents, folders]);
 
+  // ─── Pinned agents — persisté dans localStorage ───
+  const [pinnedIds, setPinnedIds] = useState<Set<string>>(() => {
+    // Hydrate depuis localStorage au mount (SSR-safe : check window)
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("dashboard-pinned-agents");
+        if (stored) return new Set(JSON.parse(stored) as string[]);
+      } catch { /* localStorage invalide, on repart à vide */ }
+    }
+    return new Set();
+  });
+
+  /** Persister les pinnedIds dans localStorage à chaque changement */
+  useEffect(() => {
+    localStorage.setItem("dashboard-pinned-agents", JSON.stringify([...pinnedIds]));
+  }, [pinnedIds]);
+
+  /** Toggle pin/unpin d'un agent */
+  const togglePin = (id: string) => {
+    setPinnedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  // Séparer les orphelins en pinned (en haut) et unpinned (en bas)
+  const pinnedOrphans = useMemo(() => orphans.filter((a) => pinnedIds.has(a.id)), [orphans, pinnedIds]);
+  const unpinnedOrphans = useMemo(() => orphans.filter((a) => !pinnedIds.has(a.id)), [orphans, pinnedIds]);
+
   const isEmpty = agents.length === 0 && folders.length === 0;
   /** True quand on a des folders mais aucun agent nulle part */
   const hasOnlyEmptyFolders = agents.length === 0 && folders.length > 0;
@@ -158,28 +189,56 @@ export function AgentSidebar({
                 onDeleteFolder={onDeleteFolder}
                 onAssignAgent={onAssignAgent}
                 flashNeon={flashFolderId === folder.id}
+                pinnedIds={pinnedIds}
+                onTogglePin={togglePin}
               />
             ))}
 
-            {/* ─── Séparateur si on a des folders ET des orphelins ─── */}
-            {folders.length > 0 && orphans.length > 0 && (
+            {/* ─── Orphelins pinned — toujours en premier ─── */}
+            {pinnedOrphans.length > 0 && (
+              <>
+                <div className="flex items-center gap-2 px-5 py-2 font-mono text-[9px] uppercase tracking-[0.2em] text-neon/40">
+                  <span>Pinned</span>
+                  <span className="inline-flex items-center justify-center px-1 py-px font-mono text-[9px] tabular-nums leading-none bg-neon/8 text-neon/50">
+                    {pinnedOrphans.length}
+                  </span>
+                </div>
+                <AnimatePresence mode="popLayout">
+                  {pinnedOrphans.map((agent) => (
+                    <AgentCard
+                      key={agent.id}
+                      agent={agent}
+                      isSelected={selectedIds.includes(agent.id)}
+                      onSelect={() => onSelect(agent.id)}
+                      onRename={onRename}
+                      isPinned
+                      onTogglePin={() => togglePin(agent.id)}
+                    />
+                  ))}
+                </AnimatePresence>
+              </>
+            )}
+
+            {/* ─── Séparateur si on a des folders ET des orphelins non-pinned ─── */}
+            {folders.length > 0 && unpinnedOrphans.length > 0 && (
               <div className="flex items-center gap-2 px-5 py-2 font-mono text-[9px] uppercase tracking-[0.2em] text-warm-600">
                 <span>Ungrouped</span>
                 <span className="inline-flex items-center justify-center px-1 py-px font-mono text-[9px] tabular-nums leading-none bg-warm-600/10 text-warm-500">
-                  {orphans.length}
+                  {unpinnedOrphans.length}
                 </span>
               </div>
             )}
 
-            {/* ─── Agents orphelins (sans dossier) ─── */}
+            {/* ─── Agents orphelins non-pinned ─── */}
             <AnimatePresence mode="popLayout">
-              {orphans.map((agent) => (
+              {unpinnedOrphans.map((agent) => (
                 <AgentCard
                   key={agent.id}
                   agent={agent}
                   isSelected={selectedIds.includes(agent.id)}
                   onSelect={() => onSelect(agent.id)}
                   onRename={onRename}
+                  onTogglePin={() => togglePin(agent.id)}
                 />
               ))}
             </AnimatePresence>

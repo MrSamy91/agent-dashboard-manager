@@ -25,6 +25,10 @@ interface FolderSectionProps {
   onAssignAgent: (agentId: string, folderId: string | undefined) => void;
   /** Flash neon temporaire quand le folder vient d'etre cree */
   flashNeon?: boolean;
+  /** Set des IDs epingles — pour faire remonter les agents pinned en haut */
+  pinnedIds?: Set<string>;
+  /** Toggle pin/unpin d'un agent */
+  onTogglePin?: (id: string) => void;
 }
 
 /** Compteurs de statut pour les pills */
@@ -45,6 +49,8 @@ export function FolderSection({
   onDeleteFolder,
   onAssignAgent,
   flashNeon,
+  pinnedIds,
+  onTogglePin,
 }: FolderSectionProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -252,7 +258,12 @@ export function FolderSection({
             {/* Indent visuel : padding-left pour montrer la hiérarchie */}
             <div className="border-l border-noir-border-light ml-6">
               <AnimatePresence mode="popLayout">
-                {agents.map((agent) => (
+                {/* Tri : agents pinned en premier, puis le reste dans l'ordre naturel */}
+                {[...agents].sort((a, b) => {
+                  const aPinned = pinnedIds?.has(a.id) ? 1 : 0;
+                  const bPinned = pinnedIds?.has(b.id) ? 1 : 0;
+                  return bPinned - aPinned;
+                }).map((agent) => (
                   <AgentCard
                     key={agent.id}
                     agent={agent}
@@ -260,6 +271,8 @@ export function FolderSection({
                     onSelect={() => onSelect(agent.id)}
                     onRename={onRenameAgent}
                     onRemoveFromFolder={() => onAssignAgent(agent.id, undefined)}
+                    isPinned={pinnedIds?.has(agent.id)}
+                    onTogglePin={onTogglePin ? () => onTogglePin(agent.id) : undefined}
                   />
                 ))}
               </AnimatePresence>

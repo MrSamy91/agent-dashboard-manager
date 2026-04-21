@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Pencil, X } from "lucide-react";
+import { Pencil, Pin, X } from "lucide-react";
 import { cn, formatDuration, formatCost, getStatusColor } from "@/lib/utils";
 import type { AgentState } from "@/lib/agent-orchestrator";
 
@@ -13,9 +13,13 @@ interface AgentCardProps {
   onRename: (id: string, newName: string) => void;
   /** Si fourni, affiche un bouton X pour retirer l'agent du dossier */
   onRemoveFromFolder?: () => void;
+  /** Indique si l'agent est épinglé en haut de la sidebar */
+  isPinned?: boolean;
+  /** Toggle pin/unpin — appelé au clic sur l'icone pin */
+  onTogglePin?: () => void;
 }
 
-export function AgentCard({ agent, isSelected, onSelect, onRename, onRemoveFromFolder }: AgentCardProps) {
+export function AgentCard({ agent, isSelected, onSelect, onRename, onRemoveFromFolder, isPinned, onTogglePin }: AgentCardProps) {
   const status = getStatusColor(agent.status);
   const isRunning = agent.status === "running";
 
@@ -118,6 +122,21 @@ export function AgentCard({ agent, isSelected, onSelect, onRename, onRemoveFromF
                 >
                   {agent.name}
                 </p>
+                {/* Bouton pin — toujours visible si pinned, sinon hover only */}
+                {onTogglePin && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onTogglePin(); }}
+                    className={cn(
+                      "flex-shrink-0 transition-opacity",
+                      isPinned
+                        ? "opacity-100 text-neon/50 hover:text-neon/80"
+                        : "opacity-0 group-hover:opacity-100 text-warm-500 hover:text-warm-300"
+                    )}
+                    title={isPinned ? "Unpin" : "Pin to top"}
+                  >
+                    <Pin className="h-2.5 w-2.5" />
+                  </button>
+                )}
                 {/* Bouton crayon — visible au hover */}
                 <button
                   onClick={(e) => {
