@@ -34,6 +34,7 @@ export async function POST(
       );
     }
 
+    console.log(`[api/resume] agent=${id} model=${agent.model || "default"} message="${message.trim().slice(0, 60)}"`);
     await orchestrator.resume(id, message.trim());
 
     return NextResponse.json({

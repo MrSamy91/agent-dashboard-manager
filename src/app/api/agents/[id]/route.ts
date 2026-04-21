@@ -41,9 +41,18 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Provide name, folderId, or model" }, { status: 400 });
   }
 
-  if (hasName) orchestrator.rename(id, body.name!.trim());
-  if (hasFolderId) orchestrator.assignAgentToFolder(id, body.folderId ?? undefined);
-  if (hasModel) agent.model = body.model || undefined;
+  if (hasName) {
+    console.log(`[api/agents] PATCH ${id} rename → "${body.name}"`);
+    orchestrator.rename(id, body.name!.trim());
+  }
+  if (hasFolderId) {
+    console.log(`[api/agents] PATCH ${id} folderId → ${body.folderId}`);
+    orchestrator.assignAgentToFolder(id, body.folderId ?? undefined);
+  }
+  if (hasModel) {
+    console.log(`[api/agents] PATCH ${id} model → "${body.model}" (was "${agent.model}")`);
+    agent.model = body.model || undefined;
+  }
 
   return NextResponse.json({ agent: orchestrator.getById(id) });
 }

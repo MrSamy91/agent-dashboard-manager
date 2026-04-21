@@ -102,6 +102,7 @@ class AgentOrchestrator {
   /** Spawner un nouvel agent et lancer son exécution en background */
   async spawn(task: SpawnTask): Promise<string> {
     const id = crypto.randomUUID();
+    console.log(`[orchestrator] spawn name="${task.name}" model=${task.model || "default"} tools=[${task.tools.join(",")}] cwd=${task.workingDirectory || "cwd"} folder=${task.folderId || "none"}`);
 
     const agent: AgentState = {
       id,
@@ -144,6 +145,7 @@ class AgentOrchestrator {
     const controller = this.abortControllers.get(id);
     const agent = this.agents.get(id);
     if (!controller || !agent) return false;
+    console.log(`[orchestrator] stop agent=${id} name="${agent.name}" status=${agent.status}`);
 
     controller.abort();
     agent.status = "stopped";
@@ -161,6 +163,7 @@ class AgentOrchestrator {
     const agent = this.agents.get(id);
     if (!agent) throw new Error("Agent not found");
     if (!agent.sessionId) throw new Error("No session to resume");
+    console.log(`[orchestrator] resume agent=${id} name="${agent.name}" model=${agent.model || "default"} session=${agent.sessionId} message="${message.slice(0, 60)}"`);
 
     // Le SDK exige un UUID valide pour le resume
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -533,8 +536,11 @@ class AgentOrchestrator {
           };
 
           if (sys.subtype === "init") {
-            // Capturer le modèle pour l'afficher dans la status bar
-            if (sys.model) agent.model = sys.model;
+            // Capturer le modèle reporté par le SDK
+            if (sys.model) {
+              console.log(`[orchestrator] SDK init agent=${id} model=${sys.model} (was ${agent.model || "unset"})`);
+              agent.model = sys.model;
+            }
             // Le message init prouve que le SDK a chargé la config
             // Si CLAUDE.md est loaded, les skills/slash_commands refletent son contenu
             this.emit(id, {
@@ -555,6 +561,7 @@ class AgentOrchestrator {
 
         // Résultat final — l'agent a terminé
         if (message.type === "result") {
+          console.log(`[orchestrator] result agent=${id} model=${agent.model} type=${(message as { subtype?: string }).subtype} cost=$${(message as { total_cost_usd?: number }).total_cost_usd}`);
           const result = message as {
             session_id?: string;
             total_cost_usd?: number;
@@ -662,25 +669,31 @@ class AgentOrchestrator {
     try {
       const { query } = await import("@anthropic-ai/claude-agent-sdk");
 
+      const resumeOptions: Record<string, unknown> = {
+        resume: agent.sessionId,
+        allowedTools: agent.tools,
+        permissionMode: "acceptEdits",
+        cwd: agent.workingDirectory,
+        abortController: controller,
+        settingSources: ["user", "project", "local"],
+        systemPrompt: { type: "preset", preset: "claude_code" },
+        env: process.env as Record<string, string>,
+        executable: "node",
+        stderr: (data: string) => {
+          const trimmed = data.trim();
+          if (trimmed) {
+            this.emit(id, { timestamp: Date.now(), type: "error", content: `[stderr] ${trimmed}` });
+          }
+        },
+        // Passer le modèle sélectionné pour que le SDK l'utilise
+        ...(agent.model && { model: agent.model }),
+      };
+
+      console.log(`[orchestrator] resumeReal agent=${id} session=${agent.sessionId} model=${agent.model || "default"} prompt="${message.slice(0, 80)}"`);
+
       for await (const msg of query({
         prompt: message,
-        options: {
-          resume: agent.sessionId,
-          allowedTools: agent.tools,
-          permissionMode: "acceptEdits",
-          cwd: agent.workingDirectory,
-          abortController: controller,
-          settingSources: ["user", "project", "local"],
-          systemPrompt: { type: "preset", preset: "claude_code" },
-          env: process.env as Record<string, string>,
-          executable: "node",
-          stderr: (data: string) => {
-            const trimmed = data.trim();
-            if (trimmed) {
-              this.emit(id, { timestamp: Date.now(), type: "error", content: `[stderr] ${trimmed}` });
-            }
-          },
-        },
+        options: resumeOptions as Parameters<typeof query>[0]["options"],
       })) {
         if (controller.signal.aborted) break;
 
