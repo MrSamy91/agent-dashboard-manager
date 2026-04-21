@@ -217,7 +217,12 @@ export function CliInput({ onSubmit, isRunning, agentName, onModelSelect, onRegi
         if (dropdownMode === "models") {
           selectModel(MODEL_OPTIONS[selectedIndex]);
         } else if (filteredCmds[selectedIndex]) {
-          selectCommand(filteredCmds[selectedIndex]);
+          // Enter sur une commande = exécuter directement (pas juste remplir l'input)
+          // Tab = autocompléter (mettre dans l'input pour ajouter des args)
+          const cmd = filteredCmds[selectedIndex];
+          setValue("");
+          setShowDropdown(false);
+          onSubmit(cmd.name);
         }
       } else {
         handleSubmit();
