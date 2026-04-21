@@ -80,9 +80,18 @@ function parseToolCall(content: string): { toolName: string; args: string } | nu
 
 export function TerminalOutput({ messages, isLive }: TerminalOutputProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
+  // Auto-scroll vers le bas quand de nouveaux messages arrivent.
+  // On utilise requestAnimationFrame pour s'assurer que le DOM est
+  // à jour après le render React avant de scroller.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    requestAnimationFrame(() => {
+      const container = scrollContainerRef.current;
+      if (container) {
+        container.scrollTop = container.scrollHeight;
+      }
+    });
   }, [messages.length]);
 
   const animationsEnabled = messages.length <= ANIMATION_THRESHOLD;
@@ -93,9 +102,9 @@ export function TerminalOutput({ messages, isLive }: TerminalOutputProps) {
       <div className="flex items-center justify-between border-b border-noir-border/60 bg-noir-card/60 px-4 py-2">
         <div className="flex items-center gap-3">
           <div className="flex gap-1.5">
-            <div className="h-2 w-2 rounded-full bg-warm-600/40" />
-            <div className="h-2 w-2 rounded-full bg-warm-600/40" />
-            <div className="h-2 w-2 rounded-full bg-warm-600/40" />
+            <div className="h-2 w-2 rounded-full bg-[#ff5f57]" />
+            <div className="h-2 w-2 rounded-full bg-[#febc2e]" />
+            <div className="h-2 w-2 rounded-full bg-[#28c840]" />
           </div>
           <span className="font-mono text-[10px] tracking-wide text-warm-600">
             output
@@ -113,7 +122,7 @@ export function TerminalOutput({ messages, isLive }: TerminalOutputProps) {
       </div>
 
       {/* Corps du terminal */}
-      <div className="custom-scrollbar relative flex-1 min-h-0 overflow-y-auto px-4 py-3">
+      <div ref={scrollContainerRef} className="custom-scrollbar relative flex-1 min-h-0 overflow-y-auto px-4 py-3">
         {messages.length === 0 ? (
           <div className="flex h-full items-center justify-center">
             <span className="font-mono text-xs text-warm-600">
@@ -153,16 +162,17 @@ export function TerminalOutput({ messages, isLive }: TerminalOutputProps) {
                   {/* Séparateur vertical */}
                   <span className="mt-[2px] flex-shrink-0 text-warm-700">│</span>
 
-                  {/* Contenu du message — formatting spécial par type */}
+                  {/* Contenu du message — formatting spécial par type.
+                      min-w-0 empêche le flex item de déborder du conteneur */}
                   {isUser ? (
                     /* Message user : prompt ">" vert + contenu */
-                    <span className="whitespace-pre-wrap break-words">
+                    <span className="min-w-0 whitespace-pre-wrap break-words">
                       <span className="font-bold text-neon">&gt; </span>
                       <span className="text-neon/80">{msg.content.slice(2)}</span>
                     </span>
                   ) : toolCall ? (
                     /* Tool call : nom en neon + args en gris */
-                    <span className="whitespace-pre-wrap break-words">
+                    <span className="min-w-0 whitespace-pre-wrap break-words">
                       <span className="font-medium text-neon">{toolCall.toolName}</span>
                       <span className="text-warm-500">(</span>
                       <span className="text-warm-400">{toolCall.args}</span>
@@ -172,7 +182,7 @@ export function TerminalOutput({ messages, isLive }: TerminalOutputProps) {
                     /* Autres messages : style par type */
                     <span
                       className={cn(
-                        "whitespace-pre-wrap break-words",
+                        "min-w-0 whitespace-pre-wrap break-words",
                         msg.type === "text" && "text-warm-100",
                         msg.type === "tool_result" && "text-warm-400",
                         msg.type === "system" && "text-warm-500 italic",

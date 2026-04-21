@@ -25,15 +25,30 @@ export function AgentDetailPanel({ agent, onStop, onResume, onSpawn, onClose, co
   // Ref pour ouvrir le model picker depuis le handler /model
   const openModelPickerRef = useRef<(() => void) | null>(null);
 
+  // Ref pour tracker l'agent actuellement affiché — on ne reset les messages
+  // que quand on change d'agent, PAS quand le status change (sinon on perd
+  // les messages SSE reçus mais pas encore persistés côté server)
+  const currentAgentIdRef = useRef<string | null>(null);
+
   // Tick pour la durée live dans la status bar
   const [, setTick] = useState(0);
+
+  // Reset des messages uniquement quand on sélectionne un agent différent
+  useEffect(() => {
+    if (!agent) {
+      currentAgentIdRef.current = null;
+      return;
+    }
+
+    if (currentAgentIdRef.current !== agent.id) {
+      currentAgentIdRef.current = agent.id;
+      setLiveMessages(agent.output);
+    }
+  }, [agent?.id, agent?.output]);
 
   // Connexion SSE pour le streaming temps réel des messages de l'agent
   useEffect(() => {
     if (!agent) return;
-
-    // Réinitialiser l'affichage avec les messages existants à l'ouverture
-    setLiveMessages(agent.output);
 
     // Pas de SSE si l'agent est déjà terminé — les données viennent du polling
     if (["completed", "error", "stopped"].includes(agent.status)) return;
