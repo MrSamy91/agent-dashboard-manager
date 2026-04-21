@@ -16,6 +16,7 @@ import {
   toastAgentStopped,
   toastFolderCreated,
   toastFolderDeleted,
+  playNotificationSound,
 } from "@/lib/toasts";
 import {
   createFolder as createFolderAction,
@@ -55,6 +56,43 @@ export function Dashboard({ initialAgents, initialFolders }: DashboardProps) {
 
   const agentsRef = useRef<AgentState[]>(agents);
   agentsRef.current = agents;
+
+  // ─── Sidebar resizable — drag du bord droit ───
+  const [sidebarWidth, setSidebarWidth] = useState(288); // 288px = 18rem (w-72)
+  const isResizingRef = useRef(false);
+  const [isResizing, setIsResizing] = useState(false); // pour le style du handle pendant le drag
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizingRef.current) return;
+      // Clamp entre 200px et 480px
+      const newWidth = Math.min(480, Math.max(200, e.clientX));
+      setSidebarWidth(newWidth);
+    };
+    const handleMouseUp = () => {
+      if (isResizingRef.current) {
+        isResizingRef.current = false;
+        setIsResizing(false);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      }
+    };
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, []);
+
+  /** Démarre le resize du sidebar */
+  const startResize = useCallback(() => {
+    isResizingRef.current = true;
+    setIsResizing(true);
+    // Empêcher la sélection de texte et forcer le curseur pendant le drag
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }, []);
 
   // ─── Tab title dynamique — "2 running | Agent Dashboard" ───
   useEffect(() => {
@@ -100,13 +138,19 @@ export function Dashboard({ initialAgents, initialFolders }: DashboardProps) {
             setFolders(mergedFolders);
           }
 
-          // ─── Détection changements de statut → toasts ───
+          // ─── Détection changements de statut → toasts + notification sonore ───
           for (const agent of merged) {
             const prevStatus = prevStatusRef.current.get(agent.id);
             if (prevStatus && prevStatus !== agent.status) {
-              if (agent.status === "completed") toastAgentCompleted(agent.name);
-              else if (agent.status === "error") toastAgentError(agent.name);
-              else if (agent.status === "stopped") toastAgentStopped(agent.name);
+              if (agent.status === "completed") {
+                toastAgentCompleted(agent.name);
+                playNotificationSound();
+              } else if (agent.status === "error") {
+                toastAgentError(agent.name);
+                playNotificationSound();
+              } else if (agent.status === "stopped") {
+                toastAgentStopped(agent.name);
+              }
             }
           }
           // Mettre à jour la ref pour la prochaine comparaison
@@ -366,8 +410,11 @@ export function Dashboard({ initialAgents, initialFolders }: DashboardProps) {
 
       {/* Zone principale — min-h-0 permet au flex-1 de shrink sous la taille du contenu */}
       <div className="mx-auto flex w-full max-w-[1920px] flex-1 min-h-0 gap-0">
-        {/* Sidebar */}
-        <div className="w-72 flex-shrink-0 overflow-hidden border-r border-noir-border lg:w-80">
+        {/* Sidebar — largeur contrôlée par le resize handle */}
+        <div
+          className="flex-shrink-0 overflow-hidden border-r border-noir-border"
+          style={{ width: sidebarWidth }}
+        >
           <AgentSidebar
             agents={agents}
             folders={folders}
@@ -381,6 +428,15 @@ export function Dashboard({ initialAgents, initialFolders }: DashboardProps) {
             onAssignAgent={handleAssignAgent}
           />
         </div>
+
+        {/* Resize handle — barre fine entre sidebar et panels */}
+        <div
+          onMouseDown={startResize}
+          className={cn(
+            "w-1 flex-shrink-0 cursor-col-resize transition-colors duration-150",
+            isResizing ? "bg-neon/30" : "hover:bg-neon/20"
+          )}
+        />
 
         {/* Panels zone — flex-col + min-h-0 pour que la grille ne déborde pas */}
         <div className="flex flex-1 min-h-0 flex-col">
