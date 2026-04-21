@@ -21,7 +21,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { AGENT_PRESETS, AVAILABLE_TOOLS, type AgentPreset } from "@/lib/agent-presets";
+import { AGENT_PRESETS, type AgentPreset } from "@/lib/agent-presets";
 import { DirectoryBrowser } from "./directory-browser";
 import type { SpawnTask, Folder } from "@/lib/agent-orchestrator";
 
@@ -110,7 +110,8 @@ export function SpawnDialog({ onSpawn, onClose, folders, onQueue }: SpawnDialogP
   const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [prompt, setPrompt] = useState("");
-  const [tools, setTools] = useState<string[]>([]);
+  // Tools par défaut — gérés automatiquement par le SDK selon le permission mode
+  const DEFAULT_TOOLS = ["Read", "Edit", "Write", "Glob", "Grep", "Bash"];
   const [directory, setDirectory] = useState("");
   const [model, setModel] = useState("");
   const [loadSettings, setLoadSettings] = useState(true);
@@ -164,24 +165,17 @@ export function SpawnDialog({ onSpawn, onClose, folders, onQueue }: SpawnDialogP
     setSelectedPreset(preset.id);
     setName(preset.name);
     setPrompt(preset.prompt);
-    setTools(preset.tools);
-  }, []);
-
-  const toggleTool = useCallback((tool: string) => {
-    setTools((prev) =>
-      prev.includes(tool) ? prev.filter((t) => t !== tool) : [...prev, tool]
-    );
   }, []);
 
   /** Spawn un nouvel agent — affiche un spinner bref pour feedback */
   const handleSubmitNew = useCallback((e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !prompt.trim() || tools.length === 0 || spawning) return;
+    if (!name.trim() || !prompt.trim() || spawning) return;
     setSpawning(true);
     onSpawn({
       name: name.trim(),
       prompt: prompt.trim(),
-      tools,
+      tools: DEFAULT_TOOLS,
       workingDirectory: directory.trim() || undefined,
       model: model || undefined,
       loadSettings,
@@ -189,17 +183,16 @@ export function SpawnDialog({ onSpawn, onClose, folders, onQueue }: SpawnDialogP
       permissionMode: permissionMode as SpawnTask["permissionMode"],
       folderId: folderId || undefined,
     });
-    // Reset apres un court delai (le dialog se ferme normalement avant)
     spawningTimer.current = setTimeout(() => setSpawning(false), 1500);
-  }, [name, prompt, tools, directory, model, loadSettings, maxBudget, permissionMode, folderId, onSpawn, spawning]);
+  }, [name, prompt, directory, model, loadSettings, maxBudget, permissionMode, folderId, onSpawn, spawning]);
 
   /** Ajouter la tâche à la queue au lieu de spawn direct */
   const handleQueue = useCallback(() => {
-    if (!name.trim() || !prompt.trim() || tools.length === 0 || !onQueue) return;
+    if (!name.trim() || !prompt.trim() || !onQueue) return;
     onQueue({
       name: name.trim(),
       prompt: prompt.trim(),
-      tools,
+      tools: DEFAULT_TOOLS,
       workingDirectory: directory.trim() || undefined,
       model: model || undefined,
       loadSettings,
@@ -208,7 +201,7 @@ export function SpawnDialog({ onSpawn, onClose, folders, onQueue }: SpawnDialogP
       folderId: folderId || undefined,
     });
     onClose();
-  }, [name, prompt, tools, directory, model, loadSettings, maxBudget, permissionMode, folderId, onQueue, onClose]);
+  }, [name, prompt, directory, model, loadSettings, maxBudget, permissionMode, folderId, onQueue, onClose]);
 
   // Cleanup timer au unmount
   useEffect(() => {
@@ -330,24 +323,6 @@ export function SpawnDialog({ onSpawn, onClose, folders, onQueue }: SpawnDialogP
                 <textarea id="agent-prompt" value={prompt} onChange={(e) => setPrompt(e.target.value)}
                   placeholder="Describe what the agent should do..." rows={3}
                   className="input-noir w-full resize-none rounded-none px-3 py-2 font-body text-sm leading-relaxed" />
-              </div>
-
-              {/* Tools */}
-              <div>
-                <label className="mb-2 block font-mono text-[10px] uppercase tracking-[0.2em] text-warm-500">Tools</label>
-                <div className="flex flex-wrap gap-1.5">
-                  {AVAILABLE_TOOLS.map((tool) => {
-                    const isActive = tools.includes(tool);
-                    return (
-                      <button key={tool} type="button" onClick={() => toggleTool(tool)}
-                        className={cn("border px-2.5 py-1 font-mono text-[10px] transition-all",
-                          isActive ? "border-neon/30 bg-neon/8 text-neon" : "border-noir-border bg-noir-card text-warm-500 hover:border-noir-border-light hover:text-warm-300"
-                        )}>
-                        {tool}
-                      </button>
-                    );
-                  })}
-                </div>
               </div>
 
               {/* Permission Mode */}
@@ -492,7 +467,7 @@ export function SpawnDialog({ onSpawn, onClose, folders, onQueue }: SpawnDialogP
                 <motion.button
                   type="button"
                   onClick={handleQueue}
-                  disabled={!name.trim() || !prompt.trim() || tools.length === 0}
+                  disabled={!name.trim() || !prompt.trim() }
                   whileTap={{ scale: 0.98 }}
                   className="group flex items-center gap-2 border border-amber-500/30 bg-amber-500/8 px-5 py-2 font-mono text-[11px] font-medium text-amber-400 transition-all hover:border-amber-500/50 hover:bg-amber-500/12 disabled:cursor-not-allowed disabled:opacity-30"
                 >
@@ -500,7 +475,7 @@ export function SpawnDialog({ onSpawn, onClose, folders, onQueue }: SpawnDialogP
                   <ListPlus className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
                 </motion.button>
               )}
-              <motion.button type="submit" disabled={!name.trim() || !prompt.trim() || tools.length === 0 || spawning}
+              <motion.button type="submit" disabled={!name.trim() || !prompt.trim()  || spawning}
                 whileTap={{ scale: 0.98 }}
                 className="group flex items-center gap-2 border border-neon/30 bg-neon/8 px-5 py-2 font-mono text-[11px] font-medium text-neon transition-all hover:border-neon/50 hover:bg-neon/12 disabled:cursor-not-allowed disabled:opacity-30">
                 {spawning ? "spawning" : "spawn"}
