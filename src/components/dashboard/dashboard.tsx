@@ -47,6 +47,11 @@ export function Dashboard({ initialAgents, initialFolders }: DashboardProps) {
   const [folders, setFolders] = useState<Folder[]>(initialFolders);
   const [showSpawn, setShowSpawn] = useState(false);
 
+  // ─── Task queue — file d'attente locale pour exécution séquentielle ───
+  const [taskQueue, setTaskQueue] = useState<SpawnTask[]>([]);
+  const taskQueueRef = useRef<SpawnTask[]>(taskQueue);
+  taskQueueRef.current = taskQueue;
+
   // Multi-panel : liste des agent IDs affichés (max 4)
   const [panels, setPanels] = useState<(string | null)[]>([null]);
   const [layoutMode, setLayoutMode] = useState<LayoutMode>(1);
@@ -156,20 +161,40 @@ export function Dashboard({ initialAgents, initialFolders }: DashboardProps) {
           }
 
           // ─── Détection changements de statut → toasts + notification sonore ───
+          let agentJustFinished = false;
           for (const agent of merged) {
             const prevStatus = prevStatusRef.current.get(agent.id);
             if (prevStatus && prevStatus !== agent.status) {
               if (agent.status === "completed") {
                 toastAgentCompleted(agent.name);
                 playNotificationSound();
+                agentJustFinished = true;
               } else if (agent.status === "error") {
                 toastAgentError(agent.name);
                 playNotificationSound();
+                agentJustFinished = true;
               } else if (agent.status === "stopped") {
                 toastAgentStopped(agent.name);
+                agentJustFinished = true;
               }
             }
           }
+
+          // ─── Auto-spawn depuis la queue quand un agent vient de finir ───
+          if (agentJustFinished && taskQueueRef.current.length > 0) {
+            const nextTask = taskQueueRef.current[0];
+            setTaskQueue((prev) => prev.slice(1));
+            // Spawn la tache suivante (fire & forget, le prochain poll la captera)
+            fetch("/api/agents", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(nextTask),
+            })
+              .then((r) => r.json())
+              .then((d) => { if (d.id) toastAgentSpawned(nextTask.name); })
+              .catch(() => console.error("Failed to auto-spawn queued task"));
+          }
+
           // Mettre à jour la ref pour la prochaine comparaison
           prevStatusRef.current = new Map(merged.map((a) => [a.id, a.status]));
 
@@ -276,6 +301,11 @@ export function Dashboard({ initialAgents, initialFolders }: DashboardProps) {
       console.error("Failed to spawn agent:", err);
     }
   }, [selectAgent]);
+
+  /** Ajouter une tâche à la queue au lieu de spawn direct */
+  const queueAgent = useCallback((task: SpawnTask) => {
+    setTaskQueue((prev) => [...prev, task]);
+  }, []);
 
   const stopAgent = useCallback(async (id: string) => {
     const agent = agentsRef.current.find((a) => a.id === id);
@@ -424,6 +454,7 @@ export function Dashboard({ initialAgents, initialFolders }: DashboardProps) {
         agentCount={agents.filter((a) => a.status === "running").length}
         onSpawn={() => setShowSpawn(true)}
         onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
+        queueCount={taskQueue.length}
       />
 
       <StatsCards agents={agents} />
@@ -568,6 +599,7 @@ export function Dashboard({ initialAgents, initialFolders }: DashboardProps) {
           onSpawn={spawnAgent}
           onClose={() => setShowSpawn(false)}
           folders={folders}
+          onQueue={queueAgent}
         />
       )}
     </div>

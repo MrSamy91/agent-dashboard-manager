@@ -17,6 +17,7 @@ import {
   Plus,
   Folder as FolderIcon,
   FolderOpen,
+  ListPlus,
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -28,6 +29,8 @@ interface SpawnDialogProps {
   onSpawn: (task: SpawnTask) => void;
   onClose: () => void;
   folders: Folder[];
+  /** Si fourni, ajoute un bouton "Queue" qui empile la tâche au lieu de spawn direct */
+  onQueue?: (task: SpawnTask) => void;
 }
 
 interface SessionInfo {
@@ -99,7 +102,7 @@ function relativeTime(iso: string): string {
   return `${days}d ago`;
 }
 
-export function SpawnDialog({ onSpawn, onClose, folders }: SpawnDialogProps) {
+export function SpawnDialog({ onSpawn, onClose, folders, onQueue }: SpawnDialogProps) {
   // ─── Tabs : "new" ou "resume" ───
   const [tab, setTab] = useState<"new" | "resume">("new");
 
@@ -189,6 +192,23 @@ export function SpawnDialog({ onSpawn, onClose, folders }: SpawnDialogProps) {
     // Reset apres un court delai (le dialog se ferme normalement avant)
     spawningTimer.current = setTimeout(() => setSpawning(false), 1500);
   }, [name, prompt, tools, directory, model, loadSettings, maxBudget, permissionMode, folderId, onSpawn, spawning]);
+
+  /** Ajouter la tâche à la queue au lieu de spawn direct */
+  const handleQueue = useCallback(() => {
+    if (!name.trim() || !prompt.trim() || tools.length === 0 || !onQueue) return;
+    onQueue({
+      name: name.trim(),
+      prompt: prompt.trim(),
+      tools,
+      workingDirectory: directory.trim() || undefined,
+      model: model || undefined,
+      loadSettings,
+      maxBudgetUsd: maxBudget ? parseFloat(maxBudget) : undefined,
+      permissionMode: permissionMode as SpawnTask["permissionMode"],
+      folderId: folderId || undefined,
+    });
+    onClose();
+  }, [name, prompt, tools, directory, model, loadSettings, maxBudget, permissionMode, folderId, onQueue, onClose]);
 
   // Cleanup timer au unmount
   useEffect(() => {
@@ -467,6 +487,19 @@ export function SpawnDialog({ onSpawn, onClose, folders }: SpawnDialogProps) {
                 className="border border-noir-border px-4 py-2 font-mono text-[11px] text-warm-400 transition-colors hover:border-noir-border-light hover:text-warm-200">
                 cancel
               </button>
+              {/* Bouton Queue — empile la tâche pour exécution séquentielle */}
+              {onQueue && (
+                <motion.button
+                  type="button"
+                  onClick={handleQueue}
+                  disabled={!name.trim() || !prompt.trim() || tools.length === 0}
+                  whileTap={{ scale: 0.98 }}
+                  className="group flex items-center gap-2 border border-amber-500/30 bg-amber-500/8 px-5 py-2 font-mono text-[11px] font-medium text-amber-400 transition-all hover:border-amber-500/50 hover:bg-amber-500/12 disabled:cursor-not-allowed disabled:opacity-30"
+                >
+                  queue
+                  <ListPlus className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                </motion.button>
+              )}
               <motion.button type="submit" disabled={!name.trim() || !prompt.trim() || tools.length === 0 || spawning}
                 whileTap={{ scale: 0.98 }}
                 className="group flex items-center gap-2 border border-neon/30 bg-neon/8 px-5 py-2 font-mono text-[11px] font-medium text-neon transition-all hover:border-neon/50 hover:bg-neon/12 disabled:cursor-not-allowed disabled:opacity-30">

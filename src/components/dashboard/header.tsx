@@ -100,6 +100,18 @@ export function Header({ agentCount, onSpawn, onToggleSidebar, queueCount }: Hea
             <span className="text-warm-500">
               active
             </span>
+            {/* Afficher le nombre de tâches en queue si > 0 */}
+            {queueCount != null && queueCount > 0 && (
+              <>
+                <span className="text-warm-600">·</span>
+                <span className="tabular-nums text-amber-400/80">
+                  {queueCount}
+                </span>
+                <span className="text-amber-500/60">
+                  queued
+                </span>
+              </>
+            )}
           </div>
 
           <div className="h-4 w-px bg-noir-border" />
