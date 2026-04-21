@@ -6,7 +6,7 @@
  * Boutons pour spawner un agent ou créer un nouveau dossier.
  */
 
-import { useMemo } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Plus, FolderPlus } from "lucide-react";
 import { AgentCard } from "./agent-card";
@@ -61,6 +61,28 @@ export function AgentSidebar({
   }, [agents, folders]);
 
   const isEmpty = agents.length === 0 && folders.length === 0;
+  /** True quand on a des folders mais aucun agent nulle part */
+  const hasOnlyEmptyFolders = agents.length === 0 && folders.length > 0;
+
+  /**
+   * Flash neon sur le dernier folder cree.
+   * On track le nombre de folders pour detecter un ajout.
+   */
+  const prevFolderCount = useRef(folders.length);
+  const [flashFolderId, setFlashFolderId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (folders.length > prevFolderCount.current) {
+      // Le dernier folder dans la liste est le nouveau
+      const newest = folders[folders.length - 1];
+      if (newest) {
+        setFlashFolderId(newest.id);
+        const timer = setTimeout(() => setFlashFolderId(null), 800);
+        return () => clearTimeout(timer);
+      }
+    }
+    prevFolderCount.current = folders.length;
+  }, [folders]);
 
   return (
     <aside className="flex h-full flex-col">
@@ -135,13 +157,17 @@ export function AgentSidebar({
                 onRenameFolder={onRenameFolder}
                 onDeleteFolder={onDeleteFolder}
                 onAssignAgent={onAssignAgent}
+                flashNeon={flashFolderId === folder.id}
               />
             ))}
 
             {/* ─── Séparateur si on a des folders ET des orphelins ─── */}
             {folders.length > 0 && orphans.length > 0 && (
-              <div className="px-5 py-2 font-mono text-[9px] uppercase tracking-[0.2em] text-warm-600">
-                Ungrouped
+              <div className="flex items-center gap-2 px-5 py-2 font-mono text-[9px] uppercase tracking-[0.2em] text-warm-600">
+                <span>Ungrouped</span>
+                <span className="inline-flex items-center justify-center px-1 py-px font-mono text-[9px] tabular-nums leading-none bg-warm-600/10 text-warm-500">
+                  {orphans.length}
+                </span>
               </div>
             )}
 

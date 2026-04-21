@@ -217,6 +217,22 @@ body::after {
   color: var(--color-warm-100);
 }
 
+/* ═══════ CLI INPUT ═══════════════════════════════════ */
+
+/* Smooth focus transition sur le CLI input container */
+.cli-input-container:focus-within {
+  border-color: #00ff8820;
+}
+
+/* Transition douce pour les tooltips et badges */
+.badge-pulse {
+  animation: badge-in 0.3s ease-out both;
+}
+@keyframes badge-in {
+  from { opacity: 0; transform: scale(0.8); }
+  to { opacity: 1; transform: scale(1); }
+}
+
 /* ═══════ GOOEY-TOAST THEME ══════════════════════════════ */
 
 /* Couleurs d'état alignées sur le thème Noir Terminal */
