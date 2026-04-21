@@ -595,6 +595,7 @@ class AgentOrchestrator {
 
     agent.status = "running";
     agent.sessionId = `mock-session-${id.slice(0, 8)}`;
+    agent.model = task.model || "claude-sonnet-4-6";
 
     // Script de messages mock qui simule un vrai agent au travail
     const mockScript: Array<{ delay: number; msg: Omit<AgentMessage, "id" | "timestamp"> }> = [

@@ -265,15 +265,26 @@ export function AgentDetailPanel({ agent, onStop, onResume, onSpawn, onClose, co
           onSubmit={handleCliSubmit}
           isRunning={!!isRunning}
           agentName={agent.name}
-          onModelSelect={(model: ModelOption) => {
+          onModelSelect={async (model: ModelOption) => {
             const label = model.label;
             const value = model.value || "default";
+            // Mise à jour optimistic du message
             setLiveMessages((prev) => [...prev, {
               id: crypto.randomUUID(),
               timestamp: Date.now(),
               type: "system",
-              content: `Model set to ${label} (${value})\nApplies to the next agent spawn or resume.`,
+              content: `Model set to ${label}${value !== "default" ? ` (${value})` : ""}`,
             }]);
+            // Persister le changement côté serveur via PATCH
+            try {
+              await fetch(`/api/agents/${agent.id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ model: value }),
+              });
+            } catch {
+              // Silently fail — le polling corrigera au prochain cycle
+            }
           }}
           onRegisterModelPicker={(fn) => { openModelPickerRef.current = fn; }}
         />

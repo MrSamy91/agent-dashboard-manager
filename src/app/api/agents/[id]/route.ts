@@ -21,12 +21,12 @@ export async function GET(_request: Request, { params }: RouteParams) {
 }
 
 /**
- * PATCH /api/agents/:id — Modifier un agent (rename et/ou assignation folder)
- * Body: { name?: string, folderId?: string | null }
+ * PATCH /api/agents/:id — Modifier un agent (rename, folder, model)
+ * Body: { name?: string, folderId?: string | null, model?: string }
  */
 export async function PATCH(request: Request, { params }: RouteParams) {
   const { id } = await params;
-  const body = (await request.json()) as { name?: string; folderId?: string | null };
+  const body = (await request.json()) as { name?: string; folderId?: string | null; model?: string };
 
   const agent = orchestrator.getById(id);
   if (!agent) {
@@ -35,13 +35,15 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
   const hasName = typeof body.name === "string" && body.name.trim();
   const hasFolderId = "folderId" in body;
+  const hasModel = typeof body.model === "string";
 
-  if (!hasName && !hasFolderId) {
-    return NextResponse.json({ error: "Provide name or folderId" }, { status: 400 });
+  if (!hasName && !hasFolderId && !hasModel) {
+    return NextResponse.json({ error: "Provide name, folderId, or model" }, { status: 400 });
   }
 
   if (hasName) orchestrator.rename(id, body.name!.trim());
   if (hasFolderId) orchestrator.assignAgentToFolder(id, body.folderId ?? undefined);
+  if (hasModel) agent.model = body.model || undefined;
 
   return NextResponse.json({ agent: orchestrator.getById(id) });
 }
