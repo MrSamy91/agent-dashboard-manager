@@ -1,0 +1,23 @@
+# Agent Dashboard — Docker Compose
+#
+# Usage:
+#   docker compose up --build        (first run)
+#   docker compose up                (subsequent runs)
+#
+# For real mode, set AGENT_MODE=real in your .env
+# and ensure ~/.claude/ contains valid auth tokens (run: claude login)
+
+services:
+  dashboard:
+    build: .
+    ports:
+      - "3000:3000"
+    env_file: .env
+    volumes:
+      # Mount Claude config (auth tokens + session history)
+      - ${CLAUDE_HOME:-~/.claude}:/root/.claude
+      # Mount your projects directory for agents to work on
+      - ${PROJECTS_DIR:-.}:/workspace
+    environment:
+      - AGENT_MODE=${AGENT_MODE:-mock}
+    restart: unless-stopped

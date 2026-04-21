@@ -1,0 +1,11 @@
+node_modules
+.next
+out
+.env
+.env.local
+settings.json
+folders.json
+.git
+.gitignore
+*.md
+.claude
