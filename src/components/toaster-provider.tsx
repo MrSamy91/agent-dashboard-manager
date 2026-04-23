@@ -14,8 +14,13 @@ export function ToasterProvider() {
     <>
       <Toaster
         position="bottom-right"
-        /* On gère le rendu custom et la durée nous-mêmes dans toasts.tsx */
-        toastOptions={{ unstyled: true }}
+        gap={8}
+        offset={16}
+        visibleToasts={3}
+        toastOptions={{
+          unstyled: true,
+          className: "!p-0 !bg-transparent !border-none !shadow-none",
+        }}
       />
       <ToastSwipeHandler />
     </>
