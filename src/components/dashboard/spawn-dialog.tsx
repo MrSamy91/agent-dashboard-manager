@@ -167,14 +167,16 @@ export function SpawnDialog({ onSpawn, onClose, folders, onQueue }: SpawnDialogP
     setPrompt(preset.prompt);
   }, []);
 
-  /** Spawn un nouvel agent — affiche un spinner bref pour feedback */
+  /** Spawn un nouvel agent — si aucun preset ni prompt, lance une instance Claude Code vanilla */
   const handleSubmitNew = useCallback((e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !prompt.trim() || spawning) return;
+    if (spawning) return;
     setSpawning(true);
+    const agentName = name.trim() || "Claude Code";
+    const agentPrompt = prompt.trim() || "You are Claude Code. Help the user with their coding tasks. Wait for instructions.";
     onSpawn({
-      name: name.trim(),
-      prompt: prompt.trim(),
+      name: agentName,
+      prompt: agentPrompt,
       tools: DEFAULT_TOOLS,
       workingDirectory: directory.trim() || undefined,
       model: model || undefined,
@@ -188,10 +190,12 @@ export function SpawnDialog({ onSpawn, onClose, folders, onQueue }: SpawnDialogP
 
   /** Ajouter la tâche à la queue au lieu de spawn direct */
   const handleQueue = useCallback(() => {
-    if (!name.trim() || !prompt.trim() || !onQueue) return;
+    if (!onQueue) return;
+    const agentName = name.trim() || "Claude Code";
+    const agentPrompt = prompt.trim() || "You are Claude Code. Help the user with their coding tasks. Wait for instructions.";
     onQueue({
-      name: name.trim(),
-      prompt: prompt.trim(),
+      name: agentName,
+      prompt: agentPrompt,
       tools: DEFAULT_TOOLS,
       workingDirectory: directory.trim() || undefined,
       model: model || undefined,
@@ -312,7 +316,7 @@ export function SpawnDialog({ onSpawn, onClose, folders, onQueue }: SpawnDialogP
                   Name
                 </label>
                 <input id="agent-name" type="text" value={name} onChange={(e) => setName(e.target.value)}
-                  placeholder="Security Reviewer" className="input-noir w-full rounded-none px-3 py-2 font-body text-sm" />
+                  placeholder="Claude Code" className="input-noir w-full rounded-none px-3 py-2 font-body text-sm" />
               </div>
 
               {/* Prompt */}
@@ -321,7 +325,7 @@ export function SpawnDialog({ onSpawn, onClose, folders, onQueue }: SpawnDialogP
                   Prompt
                 </label>
                 <textarea id="agent-prompt" value={prompt} onChange={(e) => setPrompt(e.target.value)}
-                  placeholder="Describe what the agent should do..." rows={3}
+                  placeholder="Optional — leave empty for a vanilla Claude Code instance" rows={3}
                   className="input-noir w-full resize-none rounded-none px-3 py-2 font-body text-sm leading-relaxed" />
               </div>
 
@@ -467,7 +471,7 @@ export function SpawnDialog({ onSpawn, onClose, folders, onQueue }: SpawnDialogP
                 <motion.button
                   type="button"
                   onClick={handleQueue}
-                  disabled={!name.trim() || !prompt.trim() }
+                  disabled={spawning}
                   whileTap={{ scale: 0.98 }}
                   className="group flex items-center gap-2 border border-amber-500/30 bg-amber-500/8 px-5 py-2 font-mono text-[11px] font-medium text-amber-400 transition-all hover:border-amber-500/50 hover:bg-amber-500/12 disabled:cursor-not-allowed disabled:opacity-30"
                 >
@@ -475,7 +479,7 @@ export function SpawnDialog({ onSpawn, onClose, folders, onQueue }: SpawnDialogP
                   <ListPlus className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
                 </motion.button>
               )}
-              <motion.button type="submit" disabled={!name.trim() || !prompt.trim()  || spawning}
+              <motion.button type="submit" disabled={spawning}
                 whileTap={{ scale: 0.98 }}
                 className="group flex items-center gap-2 border border-neon/30 bg-neon/8 px-5 py-2 font-mono text-[11px] font-medium text-neon transition-all hover:border-neon/50 hover:bg-neon/12 disabled:cursor-not-allowed disabled:opacity-30">
                 {spawning ? "spawning" : "spawn"}
